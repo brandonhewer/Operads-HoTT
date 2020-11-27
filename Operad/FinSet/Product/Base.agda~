@@ -1,0 +1,41 @@
+{-# OPTIONS --cubical --no-import-sorts --safe #-}
+
+module Operad.FinSet.Product.Base where
+
+open import Cubical.Data.Empty renaming (rec to ⊥-rec)
+open import Cubical.Data.Nat
+open import Cubical.Data.Sigma
+
+open import Cubical.Foundations.Function
+open import Cubical.Foundations.Isomorphism
+open import Cubical.Foundations.Prelude
+open import Cubical.Foundations.Transport
+
+open import Cubical.HITs.PropositionalTruncation renaming (rec to p-rec)
+
+open import Operad.Fin
+open import Operad.FinSet.Base
+open import Operad.FinSet.Properties
+
+open Iso
+
+private
+  variable
+    ℓ₁ ℓ₂ : Level
+
+isFiniteΣ : {A : Type ℓ₁} {B : A → Type ℓ₂} →
+            isFinite A → ((a : A) → isFinite (B a)) → isFinite (Σ A B)
+isFiniteΣ {B = B} (n , I′) f = p-rec isPropIsFinite (λ I →
+  ΣFin n (fst ∘ f ∘ inv I) , p-rec propTruncIsProp (λ I₂ →
+      ∣
+        compIso (Σ-cong-iso I λ a →
+                   subst (λ x → Iso (B x)
+                         (Fin (fst (f (inv I (fun I a)))))) (leftInv I a)
+                         (I₂ (fun I a)))
+                (ΣFin↔FinΣ n _)
+      ∣
+    ) (finiteChoice n (snd ∘ f ∘ inv I))
+  ) I′
+
+Σⁿ : (A : FinSet ℓ₁) (B : ⟦ A ⟧ → FinSet ℓ₂) → FinSet (ℓ-max ℓ₁ ℓ₂)
+Σⁿ (A , I) B = (Σ[ a ∈ A ] ⟦ B a ⟧) , isFiniteΣ I (snd ∘ B)
