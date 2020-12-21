@@ -40,8 +40,11 @@ rec₂ : (A : FinSet ℓ₁) (B : FinSet ℓ₂) {P : Type ℓ₃} → isProp P 
        (Iso ⟦ A ⟧ (Fin (card A)) → Iso ⟦ B ⟧ (Fin (card B)) → P) → P
 rec₂ A B p f = rec A p λ a → rec B p (f a)
 
+isFinite-n : ∀ {ℓ} n → isFinite (Lift {j = ℓ} (Fin n))
+isFinite-n n = n , ∣ invIso LiftIso ∣
+
 n-FinSet : ∀ {ℓ} n → FinSet ℓ
-n-FinSet n = Lift (Fin n) , n , ∣ invIso LiftIso ∣
+n-FinSet n = _ , isFinite-n n
 
 ⊤-FinSet : ∀ ℓ → FinSet ℓ
 ⊤-FinSet ℓ = n-FinSet 1

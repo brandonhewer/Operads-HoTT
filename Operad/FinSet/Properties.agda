@@ -4,7 +4,6 @@ module Operad.FinSet.Properties where
 
 open import Cubical.Data.Empty renaming (rec to ⊥-rec)
 open import Cubical.Data.Nat hiding (snotz; znots)
-open import Cubical.Data.Sigma
 
 open import Cubical.Foundations.Equiv
 open import Cubical.Foundations.Function
@@ -21,6 +20,7 @@ open import Cubical.Relation.Nullary
 
 open import Operad.Fin
 open import Operad.FinSet.Base
+open import Operad.Sigma
 
 private
   variable
@@ -104,25 +104,6 @@ private
   rightInv (¬Iso-suc I) _ = isPropFin0 _ _
   leftInv  (¬Iso-suc I) _ = isPropΠ (λ _ → isProp⊥) _ _
 
-  isContr→IsSet : isContr X → isSet X
-  isContr→IsSet p = isContr→isOfHLevel 2 p
-
-  open import Cubical.Data.Unit renaming (Unit to ⊤)
-
-  ⊤ΠRule : (Y : ⊤ → Type ℓ₂) → Iso ((x : ⊤) → Y x) (Y _)
-  fun (⊤ΠRule Y) f = f _
-  inv (⊤ΠRule Y) y _ = y
-  rightInv (⊤ΠRule Y) y = refl
-  leftInv (⊤ΠRule Y) f = refl
-
-  contrΠRule : (Y : X → Type ℓ₂) (p : isContr X) → Iso ((x : X) → Y x) (Y (fst p))
-  fun (contrΠRule Y (c , p)) f = f c
-  inv (contrΠRule Y (c , p)) y x = subst Y (p x) y
-  rightInv (contrΠRule Y p) y = cong (λ p → subst Y p y) (isContr→IsSet p _ _ _ _) ∙ substRefl {B = Y} y
-  leftInv (contrΠRule Y p) f =
-    funExt λ x → subst (λ x → subst Y (snd p x) (f (fst p)) ≡ f x) (snd p x)
-                             (isSet-subst {B = Y} (isContr→IsSet p) _ _)
-
 isContr→≡Fin1 : isContr X → X ≡ Lift (Fin 1)
 isContr→≡Fin1 p = isoToPath (ContrIso p (lift _ , λ { (lift zero) → refl }))
 
@@ -190,7 +171,7 @@ isFiniteDecProp isPropX (yes x) = isFiniteContr (x , isPropX _)
 isFiniteDecProp isPropX (no ¬x) = isFiniteEmpty ¬x
 
 isFiniteRemove : isFinite X → (x : X) → isFinite (Σ[ y ∈ X ] ¬ x ≡ y)
-isFiniteRemove (zero , p) x = p-rec isPropIsFinite (λ I → ⊥-rec (¬Fin0 (fun I x))) p
+isFiniteRemove (zero , p)  x = p-rec isPropIsFinite (λ I → ⊥-rec (¬Fin0 (fun I x))) p
 isFiniteRemove (suc n , p) x = n , p-rec propTruncIsProp (λ I →
     ∣ compIso (Σ-cong-iso I λ y → Inj→¬Iso (fun I) (isoFunInjective I) x y) (Fin/ n (fun I x)) ∣
   ) p
@@ -211,12 +192,12 @@ isFiniteFin≡ isFiniteX a b with isFinite→Discrete isFiniteX a b
 _⟨_≡_⟩ : (A : FinSet ℓ₁) → ⟦ A ⟧ → ⟦ A ⟧ → FinSet ℓ₁
 (_ , isFiniteA) ⟨ a ≡ b ⟩ = _ , isFiniteFin≡ isFiniteA a b
 
-isFinite¬ : (A : FinSet ℓ₁) → isFinite (¬ ⟦ A ⟧)
-isFinite¬ (_ , zero  , p) = 1 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso0) p
-isFinite¬ (_ , suc n , p) = 0 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso-suc) p
+isFinite¬ : isFinite X → isFinite (¬ X)
+isFinite¬ (zero  , p) = 1 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso0) p
+isFinite¬ (suc n , p) = 0 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso-suc) p
 
 _⟨_≢_⟩ : (A : FinSet ℓ₁) → ⟦ A ⟧ → ⟦ A ⟧ → FinSet ℓ₁
-A ⟨ a ≢ b ⟩ = _ , isFinite¬ (A ⟨ a ≡ b ⟩)
+A ⟨ a ≢ b ⟩ = _ , isFinite¬ (isFiniteFin≡ (snd A) a b) -- (A ⟨ a ≡ b ⟩)
 
 isFiniteClosure : (_∙_ : ∀ {ℓ₁ ℓ₂} (A : Type ℓ₁) → (A → Type ℓ₂) → Type (ℓ-max ℓ₁ ℓ₂)) →
                   (size : ∀ n (ns : Fin n → ℕ) → ℕ) →

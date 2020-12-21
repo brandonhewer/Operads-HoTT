@@ -40,11 +40,14 @@ _⇒*_ {ℓ₁ = ℓ₁} {n = n} K₁ K₂ =
   Σ[ f ∈ (typ (fst (K₁ X)) → typ (fst (K₂ X))) ]
     ((p : n ≡ card X) → ∥ f (snd (K₁ X) p) ≡ snd (K₂ X) p ∥)
 
+⇒*′-res : (X : FinSet ℓ₁) → PointedSpecies′ ℓ₂ n X → PointedSpecies′ ℓ₃ n X → Type _
+⇒*′-res {n = n} X K₁ K₂ =
+  Σ[ f ∈ (fst K₁ → fst K₂) ]
+  ((p : n ≡ card X) → ∥ f (snd K₁ p) ≡ snd K₂ p ∥)
+
 _⇒*′_ : *Species′ ℓ₁ ℓ₂ n → *Species′ ℓ₁ ℓ₃ n → Type _
 _⇒*′_ {ℓ₁ = ℓ₁} {n = n} K₁ K₂ =
-  (X : FinSet ℓ₁) →
-  Σ[ f ∈ (fst (K₁ X) → fst (K₂ X)) ]
-    ((p : n ≡ card X) → ∥ f (snd (K₁ X) p) ≡ snd (K₂ X) p ∥)
+  (X : FinSet ℓ₁) → ⇒*′-res X (K₁ X) (K₂ X)
 
 _∘*_ : {K₁ : *Species i ℓ₁ ℓ₂ n} {K₂ : *Species j ℓ₁ ℓ₃ n} {K₃ : *Species k ℓ₁ ℓ₄ n} →
        K₂ ⇒* K₃ → K₁ ⇒* K₂ → K₁ ⇒* K₃
@@ -64,7 +67,7 @@ _∘*′_ : {K₁ : *Species′ ℓ₁ ℓ₂ n} {K₂ : *Species′ ℓ₁ ℓ�
       p-rec propTruncIsProp (λ pg →
         ∣ cong (fst (g X)) pf ∙ pg ∣
       ) (snd (g X) p)
-    ) (snd (f X) p)   
+    ) (snd (f X) p)
 
 idˢ : (K : Species i ℓ₁ ℓ₂) → K ⇒ˢ K
 idˢ K X k = k
@@ -81,5 +84,6 @@ id*′ K X = (λ k → k) , λ _ → ∣ refl ∣
 _≡*_ : {K₁ K₂ : *Species i ℓ₁ ℓ₂ n} → K₁ ⇒* K₂ → K₁ ⇒* K₂ → Type _
 f ≡* g = ∀ X k → fst (f X) k ≡ fst (g X) k
 
-_≡*′_ : {K₁ K₂ : *Species i ℓ₁ ℓ₂ n} → K₁ ⇒* K₂ → K₁ ⇒* K₂ → Type _
+_≡*′_ : {K₁ : *Species′ ℓ₁ ℓ₂ n} {K₂ : *Species′ ℓ₁ ℓ₃ n} →
+        K₁ ⇒*′ K₂ → K₁ ⇒*′ K₂ → Type _
 f ≡*′ g = ∀ X k → fst (f X) k ≡ fst (g X) k
