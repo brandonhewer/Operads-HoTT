@@ -29,25 +29,27 @@ open import Cubical.HITs.PropositionalTruncation
 private
   variable
     ℓ₁ ℓ₂ ℓ₃ ℓ₄ : Level
+    U : Type ℓ₁
+    P : U → Type ℓ₂
 
 open Iso
 
 FinSetD : ∀ ℓ → Type (ℓ-suc ℓ)
 FinSetD ℓ = FinClosure {ℓ₂ = ℓ} ⟦_⟧
 
-ΣIdL : {U : Type ℓ₁} {P : U → Type ℓ₂}
-       (A : FinClosure P) → ΣF ⊤F (λ _ → A) ≡ A
+ΣIdL : (A : FinClosure P) → ΣF ⊤F (λ _ → A) ≡ A
 ΣIdL A = un _ _ (isoToEquiv Σ-Idl)
 
-ΣIdR : {U : Type ℓ₁} {P : U → Type ℓ₂}
-       (A : FinClosure P) → ΣF A (λ _ → ⊤F) ≡ A
+ΣIdR : (A : FinClosure P) → ΣF A (λ _ → ⊤F) ≡ A
 ΣIdR A = un _ _ (isoToEquiv Σ-Idr)
 
-ΣAssoc : {U : Type ℓ₁} {P : U → Type ℓ₂}
-         (A : FinClosure P) (B : El A → FinClosure P)
+ΣAssoc : (A : FinClosure P) (B : El A → FinClosure P)
          (C : ∀ a → El (B a) → FinClosure P) →
          ΣF (ΣF A B) (uncurry C) ≡ ΣF A λ a → ΣF (B a) (C a)
 ΣAssoc A B C = un _ _ (isoToEquiv Σ-assoc-Iso)
+
+_/_ : (A : FinClosure P) (a : El A) → FinClosure P
+A / a = ΣF A (¬F ∘ ≡F A a)
 
 record FinClosed {U : Type ℓ₁}
                  (P : U → Type ℓ₂)
@@ -64,7 +66,7 @@ record FinClosed {U : Type ℓ₁}
 
 open FinClosed
 
-fromClosed : {U : Type ℓ₁} {P : U → Type ℓ₂} {F : Type ℓ₂ → Type ℓ₃} →
+fromClosed : {F : Type ℓ₂ → Type ℓ₃} →
              FinClosed P F → ∀ A → F (El {P = P} A)
 fromClosed p (Ty u)           = Ty-F p u
 fromClosed p ⊥F               = ⊥-F p

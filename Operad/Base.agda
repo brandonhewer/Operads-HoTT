@@ -9,13 +9,16 @@ open import Operad.Fin
 open import Operad.FinSet.Small
 open import Operad.FinSet.Small.Properties
 
+private
+  variable
+    ℓ₁ ℓ₂ : Level
+
 record Operad (ℓ₁ ℓ₂ : Level) : Type (ℓ-max (ℓ-suc ℓ₁) (ℓ-suc ℓ₂)) where
   field
     Ops      : FinSetD ℓ₁ → Type ℓ₂
     isSetOps : ∀ A → isSet (Ops A)
     id       : Ops ⊤F
-    comp     : ∀ A (B : El A → FinSetD ℓ₁) →
-                 Ops A → (∀ a → Ops (B a)) → Ops (ΣF A B)
+    comp     : ∀ A B → Ops A → (∀ a → Ops (B a)) → Ops (ΣF A B)
 
     idl      : ∀ A k → PathP (λ i → Ops (ΣIdL A i))
                              (comp ⊤F (const A) id (const k)) k

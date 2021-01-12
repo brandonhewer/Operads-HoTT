@@ -23,8 +23,28 @@ open import Operad.FinSet
 open import Operad.Species.Base
 open import Operad.Species.Morphism
 
-data Partition {ℓ : Level} : FinSet ℓ → Type (ℓ-suc ℓ) where
-  partition : (A : FinSet ℓ) (B : ⟦ A ⟧ → FinSet ℓ) → Partition (Σⁿ A B)
+data PartitionBy {ℓ₁ ℓ₂ : Level} {U : Type ℓ₁}
+                 (E : U → Type ℓ₂) (Σ : ∀ u → (E u → U) → U)
+                 : U → Type (ℓ-max ℓ₁ ℓ₂) where
+  partition : (A : U) (B : E A → U) → PartitionBy E Σ (Σ A B)
+
+Partition : {ℓ : Level} → FinSet ℓ → Type (ℓ-suc ℓ)
+Partition = PartitionBy ⟦_⟧ Σⁿ
+
+_⊔_ : ℕ → ℕ → ℕ
+zero  ⊔ n     = n
+suc m ⊔ zero  = suc m
+suc m ⊔ suc n = suc (m ⊔ n)
+
+⊔-idr : ∀ m → m ⊔ 0 ≡ m
+⊔-idr zero    = refl
+⊔-idr (suc m) = refl
+
+⊔-comm : ∀ m n → m ⊔ n ≡ n ⊔ m
+⊔-comm zero    zero    = refl
+⊔-comm zero    (suc n) = refl
+⊔-comm (suc m) zero    = refl
+⊔-comm (suc m) (suc n) = cong suc (⊔-comm m n)
 
 private
   variable
@@ -32,10 +52,11 @@ private
     i j k l : HLevel
     X : FinSet ℓ₁
 
-  _⊔_ : ℕ → ℕ → ℕ
-  zero  ⊔ n     = n
-  suc m ⊔ zero  = suc m
-  suc m ⊔ suc n = suc (m ⊔ n)
+  PartitionBy′ : {U : Type ℓ₁}
+                 (E : U → Type ℓ₂)
+                 (Σ : ∀ u → (E u → U) → U) →
+                 U → Type (ℓ-max ℓ₁ ℓ₂)
+  PartitionBy′ {U = U} E Σ X = Σ[ A ∈ U ] Σ[ B ∈ (E A → U) ] Σ A B ≡ X
 
   Partition′ : FinSet ℓ₁ → Type (ℓ-suc ℓ₁)
   Partition′ {ℓ₁} X = Σ[ A ∈ FinSet ℓ₁ ] Σ[ B ∈ (⟦ A ⟧ → FinSet ℓ₁) ] Σⁿ A B ≡ X
@@ -54,26 +75,19 @@ private
                                              isGroupoidΣ (isGroupoidΠ λ _ → isGroupoidFinSet)
                                                          λ _ → isSet→isGroupoid (isGroupoidFinSet _ _)
 
-  isOfHLevelΣ′ : {A : Type ℓ₁} {B : A → Type ℓ₂} →
-                 ∀ m n → isOfHLevel m A → ((x : A) → isOfHLevel n (B x))
-                       → isOfHLevel (m ⊔ n) (Σ A B)
-  isOfHLevelΣ′ 0 0       = isContrΣ
-  isOfHLevelΣ′ 0 1 h₁ h₂ = isPropΣ (isContr→isProp h₁) h₂
-  isOfHLevelΣ′ 1 0 h₁ h₂ = isPropΣ h₁ (isContr→isProp ∘ h₂)
-  isOfHLevelΣ′ 1 1       = isPropΣ
-  isOfHLevelΣ′ 0 (suc (suc n)) h₁ h₂ =
-    isOfHLevelΣ (suc (suc n)) (isContr→isOfHLevel (suc (suc n)) h₁) h₂
-  isOfHLevelΣ′ 1 (suc (suc n)) h₁ h₂ =
-    isOfHLevelΣ (suc (suc n)) (isProp→isOfHLevelSuc (suc n) h₁) h₂
-  isOfHLevelΣ′ (suc (suc m)) 0 h₁ h₂ =
-    isOfHLevelΣ (suc (suc m)) h₁ (isContr→isOfHLevel (suc (suc m)) ∘ h₂)
-  isOfHLevelΣ′ (suc (suc m)) 1 h₁ h₂ =
-    isOfHLevelΣ (suc (suc m)) h₁ (isProp→isOfHLevelSuc (suc m) ∘ h₂)
-  isOfHLevelΣ′ {B = B} (suc (suc m)) (suc (suc n)) h₁ h₂ x y =
-    let h₃ : isOfHLevel (suc (m ⊔ n)) (ΣPathTransport x y)
-        h₃ = isOfHLevelΣ′ (suc m) (suc n) (h₁ (fst x) (fst y)) λ p → h₂ (p i1)
-                          (subst B p (snd x)) (snd y)
-     in transport (λ i → isOfHLevel (suc (m ⊔ n)) (ΣPathTransport≡PathΣ x y i)) h₃
+isOfHLevel⊔ : ∀ {m} {ℓ₁} {A : Type ℓ₁} n → isOfHLevel m A → isOfHLevel (m ⊔ n) A
+isOfHLevel⊔ {0}                                 = isContr→isOfHLevel
+isOfHLevel⊔ {suc m}       0             p     = p
+isOfHLevel⊔ {1}           (suc n)             = isProp→isOfHLevelSuc n
+isOfHLevel⊔ {suc (suc m)} 1             p     = p
+isOfHLevel⊔ {suc (suc m)} (suc (suc n)) p x y = isOfHLevel⊔ {suc m} (suc n) (p x y)
+
+isOfHLevelΣ′ : {A : Type ℓ₁} {B : A → Type ℓ₂} →
+               ∀ m n → isOfHLevel m A → ((x : A) → isOfHLevel n (B x))
+                     → isOfHLevel (m ⊔ n) (Σ A B)
+isOfHLevelΣ′ m n h₁ h₂ = isOfHLevelΣ _ (isOfHLevel⊔ _ h₁)
+                            (subst (flip isOfHLevel _) (⊔-comm n m) ∘
+                             isOfHLevel⊔ m ∘ h₂)
 
 index : {X : FinSet ℓ₁} → Partition X → FinSet ℓ₁
 index (partition A _) = A

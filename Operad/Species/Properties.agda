@@ -20,6 +20,7 @@ open import Cubical.Relation.Nullary
 open import Operad.Fin
 open import Operad.FinSet.Base
 open import Operad.Species.Base
+open import Operad.Species.Combinators
 open import Operad.Species.Morphism
 open import Operad.Sum
 
@@ -29,9 +30,22 @@ private
     i j : HLevel
     ℓ₁ ℓ₂ ℓ₃ ℓ₄ : Level
 
+  isProp→isOfHLevel⊔1 : ∀ {A : Type ℓ₁} n → isProp A → isOfHLevel (n ⊔ 1) A
+  isProp→isOfHLevel⊔1 zero p = p
+  isProp→isOfHLevel⊔1 {A = A} (suc n) p =
+    subst (λ m → isOfHLevel (suc m) A) (sym (⊔-idr n))
+          (isProp→isOfHLevelSuc n p) 
+
 toSpecies : (K : FinSet ℓ₁ → Type ℓ₂) (P : ∀ A → K A → Type ℓ₃) →
             (∀ A k → isProp (P A k)) → Species 1 ℓ₁ _
 toSpecies K P isPropP A = ((k : K A) → P A k) , isPropΠ λ _ → isPropP _ _
+
+isOfHLevel⇒* : (K₁ : *Species i ℓ₁ ℓ₂ n) (K₂ : *Species j ℓ₁ ℓ₃ n) →
+               isOfHLevel (j ⊔ 1) (K₁ ⇒* K₂)
+isOfHLevel⇒* K₁ K₂ = isOfHLevelΠ _ λ A →
+                     isOfHLevelΣ _ (
+                     isOfHLevelΠ _ λ _ → isOfHLevel⊔ _ (str (fst (K₂ A))))
+                     λ _ → isProp→isOfHLevel⊔1 _ (isPropΠ λ _ → propTruncIsProp)      
 
 ≡*′→≡ : {K₁ : *Species′ ℓ₁ ℓ₂ n} {K₂ : *Species′ ℓ₁ ℓ₃ n}
         (f : K₁ ⇒*′ K₂) (g : K₁ ⇒*′ K₂) → f ≡*′ g → f ≡ g
