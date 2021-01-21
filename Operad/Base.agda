@@ -16,7 +16,7 @@ private
 record Operad (ℓ₁ ℓ₂ : Level) : Type (ℓ-max (ℓ-suc ℓ₁) (ℓ-suc ℓ₂)) where
   field
     Ops      : FinSetD ℓ₁ → Type ℓ₂
-    isSetOps : ∀ A → isSet (Ops A)
+    isSetOps : ∀ A → isSet (Ops A) 
     id       : Ops ⊤F
     comp     : ∀ A B → Ops A → (∀ a → Ops (B a)) → Ops (ΣF A B)
 

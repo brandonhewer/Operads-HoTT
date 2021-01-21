@@ -4,8 +4,11 @@ module Operad.Free.Properties where
 
 open import Cubical.Foundations.Function
 open import Cubical.Foundations.HLevels
+open import Cubical.Foundations.Isomorphism
 open import Cubical.Foundations.Prelude hiding (comp)
+open import Cubical.Foundations.Structure
 
+open import Operad.Algebra
 open import Operad.Base
 open import Operad.FinSet.Small
 open import Operad.Free.Base
@@ -13,11 +16,11 @@ open import Operad.Morphism
 
 private
   variable
-    ℓ₁ ℓ₂ : Level
+    ℓ₁ ℓ₂ ℓ₃ : Level
 
 open Operad
 
-interpret′ : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₂) →
+interpret′ : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₃) →
              (∀ A → K A → Ops O A) → ∀ A → Free K A → Ops O A
 interpret′ K O f A (Op .A x) = f A x
 interpret′ K O f .⊤F unit = id O
@@ -39,13 +42,13 @@ interpret′ K O f A (set/ .A t₁ t₂ p₁ p₂ i j) =
 
 open _⇒ᵒᵖ_
 
-interpret : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₂) →
+interpret : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₃) →
             (∀ A → K A → Ops O A) → FreeOperad K ⇒ᵒᵖ O
 ⟪ interpret K O f ⟫ t = interpret′ K O f _ t
 id-resp (interpret K O f) = refl
 ∘-resp (interpret K O f) A B a b = refl
 
-unique-interpret : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₂)
+unique-interpret : (K : FinSetD ℓ₁ → Type ℓ₂) (O : Operad ℓ₁ ℓ₃)
                    (f : ∀ A → K A → Ops O A) →
                    (g : FreeOperad K ⇒ᵒᵖ O) →
                    (∀ A t → ⟪ g ⟫ (Op A t) ≡ f A t) →
@@ -112,3 +115,32 @@ unique-interpret K O f g p A (set/ .A t₁ t₂ p₁ p₂ i j) =
     (cong (unique-interpret K O f g p A) p₁)
     (cong (unique-interpret K O f g p A) p₂)
     (set/ A t₁ t₂ p₁ p₂) i j
+
+open Algebra
+
+FreeAlg-run : {K : FinSetD ℓ₁ → Type ℓ₂} →
+              (α : Algebra (FreeOperad K)) →
+              run-alg α ≡ interpret _ _ λ A → ⟪ run-alg α ⟫ ∘ Op A
+FreeAlg-run α = ⇒≡→≡ _ _ (unique-interpret _ _ _ (run-alg α) λ _ _ → refl)
+
+FreeAlg→ΣΠ : {K : FinSetD ℓ₁ → Type ℓ₂} →
+             Algebra (FreeOperad K) →
+             Σ[ X ∈ hSet ℓ₁ ] ((A : FinSetD ℓ₁) → K A → (El A → typ X) → typ X)
+FreeAlg→ΣΠ alg = Carrier alg , λ A → ⟪ run-alg alg ⟫ ∘ Op A
+
+ΣΠ→FreeAlg : {K : FinSetD ℓ₁ → Type ℓ₂} →
+             (X : hSet ℓ₁) → ((A : FinSetD ℓ₁) → K A → (El A → typ X) → typ X) →
+             Algebra (FreeOperad K)
+Carrier (ΣΠ→FreeAlg X f) = X
+run-alg (ΣΠ→FreeAlg X f) = interpret _ _ f
+
+open Iso
+
+FreeAlg↔ΣΠ : (K : FinSetD ℓ₁ → Type ℓ₂) →
+             Iso (Algebra (FreeOperad K))
+                 (Σ[ X ∈ hSet ℓ₁ ] ((A : FinSetD ℓ₁) → K A → (El A → typ X) → typ X))
+fun (FreeAlg↔ΣΠ K)                     = FreeAlg→ΣΠ
+inv (FreeAlg↔ΣΠ K)                     = uncurry ΣΠ→FreeAlg
+rightInv (FreeAlg↔ΣΠ K) _              = refl
+Carrier (leftInv (FreeAlg↔ΣΠ K) alg i) = Carrier alg
+run-alg (leftInv (FreeAlg↔ΣΠ K) alg i) = sym (FreeAlg-run alg) i

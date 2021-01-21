@@ -106,6 +106,3 @@ Ty-F     isFinSetFinClosed   = snd
 Π-F      isFinSetFinClosed   = isFiniteΠ
 ≡-F      isFinSetFinClosed   = isFiniteFin≡
 ¬-F      isFinSetFinClosed   = isFinite¬
-
-FinSet↔FinSetD : ∀ ℓ → Iso (FinSetD ℓ) (FinSet ℓ)
-FinSet↔FinSetD ℓ = reflectIso _,_ (λ _ _ → idEquiv _) isFinSetFinClosed
