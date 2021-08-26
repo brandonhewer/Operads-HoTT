@@ -20,10 +20,10 @@ private
     ℓ₁ ℓ₂ ℓ₃ : Level
     A : Type ℓ₁
 
-Σⁿ-Idl : {A : FinSet ℓ₁} → (Σⁿ (⊤-FinSet ℓ₁) λ _ → A) ≡ A
+Σⁿ-Idl : {A : FinSet ℓ₁} → (Σⁿ (1-FinSet ℓ₁) λ _ → A) ≡ A
 Σⁿ-Idl = Lift≡ _ _ (isoToPath Σ-Idl)
 
-Σⁿ-Idr : {A : FinSet ℓ₁} → (Σⁿ A λ _ → ⊤-FinSet ℓ₁) ≡ A
+Σⁿ-Idr : {A : FinSet ℓ₁} → (Σⁿ A λ _ → 1-FinSet ℓ₁) ≡ A
 Σⁿ-Idr = Lift≡ _ _ (isoToPath Σ-Idr)
 
 Σⁿ-Assoc : (A : FinSet ℓ₁)
@@ -31,3 +31,4 @@ private
            (C : (a : ⟦ A ⟧) → ⟦ B a ⟧ → FinSet ℓ₃) →
            (Σⁿ (Σⁿ A B) (uncurry C)) ≡ (Σⁿ A λ a → Σⁿ (B a) (C a))
 Σⁿ-Assoc _ _ _ = Lift≡ _ _ (isoToPath Σ-assoc-Iso)
+

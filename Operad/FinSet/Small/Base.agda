@@ -2,6 +2,8 @@
 
 module Operad.FinSet.Small.Base where
 
+open import Cubical.Data.Unit renaming (Unit to ⊤)
+
 open import Cubical.Foundations.Equiv
 open import Cubical.Foundations.Function
 open import Cubical.Foundations.Isomorphism
@@ -34,7 +36,7 @@ data FinClosure {U = U} P where
 
 El {P = P} (Ty u) = P u
 El ⊥F             = Lift (Fin 0)
-El ⊤F             = Lift (Fin 1)
+El ⊤F             = Lift ⊤
 El (ΣF A B)       = Σ (El A) (El ∘ B)
 El (ΠF A B)       = (a : El A) → El (B a)
 El (≡F A a b)     = a ≡ b

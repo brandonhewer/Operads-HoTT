@@ -312,7 +312,7 @@ finiteChoice : ∀ {ℓ} n {B : Fin n → Type ℓ} → ((i : Fin n) → ∥ B i
 finiteChoice zero f = ∣ (λ ()) ∣
 finiteChoice (suc n) f =
   let ∥g∥ = finiteChoice n (f ∘ suc)
-   in p-rec propTruncIsProp (λ b → p-rec propTruncIsProp (∣_∣ ∘ ∀-cons b) ∥g∥) (f zero)
+   in p-rec squash (λ b → p-rec squash (∣_∣ ∘ ∀-cons b) ∥g∥) (f zero)
 
 finiteChoice₂ : ∀ {ℓ} n (ns : Fin n → ℕ)
                   {C : (i : Fin n) → Fin (ns i) → Type ℓ} →
@@ -322,7 +322,7 @@ finiteChoice₂ zero    _  _ = ∣ (λ ()) ∣
 finiteChoice₂ (suc n) ns f =
   let ∥g∥  = finiteChoice (ns zero) (f zero)
       ∥gs∥ = finiteChoice₂ n (ns ∘ suc) (f ∘ suc)
-   in p-rec propTruncIsProp (λ g → p-rec propTruncIsProp (∣_∣ ∘ ∀-cons g) ∥gs∥) ∥g∥
+   in p-rec squash (λ g → p-rec squash (∣_∣ ∘ ∀-cons g) ∥gs∥) ∥g∥
 
 congIso₂′ : ∀ {ℓ₁ ℓ₂} (_∙_ : Type ℓ₁ → Type ℓ₂ → Type (ℓ-max ℓ₁ ℓ₂)) →
            ∀ {A B C D} → Iso A B → Iso C D → Iso (A ∙ C) (B ∙ D)

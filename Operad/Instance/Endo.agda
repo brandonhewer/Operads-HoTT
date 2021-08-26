@@ -20,7 +20,7 @@ open import Operad.Sigma hiding (comp)
 
 private
   variable
-    ℓ₁ ℓ₂ : Level
+    ℓ₁ ℓ₂ ℓ₃ : Level
 
   open Iso
 
@@ -51,27 +51,27 @@ private
     _                     ∎
 
   endo⁻-≡ : {A₁ A₂ :  Type ℓ₁} {B : Type ℓ₂} (p : Iso A₁ A₂)
-             (f : A₁ → B → B) →
-             PathP (λ i → isoToPath p i → B → B)
-                   f (f ∘ inv p)
-  endo⁻-≡ p = transport⁻ (PathP≡Path _ _ _) ∘ endo⁻-transp≡ p              
+            (f : A₁ → B → B) →
+            PathP (λ i → isoToPath p i → B → B)
+                  f (f ∘ inv p)
+  endo⁻-≡ p = transport⁻ (PathP≡Path _ _ _) ∘ endo⁻-transp≡ p
 
 open Operad
 
-Endo : {X : Type ℓ₁} → isSet X → Operad ℓ₁ ℓ₁
+Endo : {X : Type ℓ₂} → isSet X → Operad ℓ₁ (ℓ-max ℓ₁ ℓ₂)
 Ops (Endo {X = X} isSetX) A = (El A → X) → X
 isSetOps (Endo isSetX) A = isSetΠ λ _ → isSetX
 id (Endo isSetX) f = f (lift zero)
 comp (Endo isSetX) A B f gs h = f λ a → gs a λ b → h (a , b)
-idl (Endo {X = X} isSetX) A = endo-≡ Σ-Idl
-idr (Endo {X = X} isSetX) A = endo-≡ Σ-Idr
+idl (Endo {X = X} isSetX) A k = endo-≡ ΣIdLIso (k (lift zero))
+idr (Endo {X = X} isSetX) A = endo-≡ ΣIdRIso
 assoc (Endo {X = X} isSetX) A B C f fs fss = endo-≡ Σ-assoc-Iso _
 
-Endo⁻ : {X : Type ℓ₁} → isSet X → Operad ℓ₁ ℓ₁
+Endo⁻ : {X : Type ℓ₂} → isSet X → Operad ℓ₁ (ℓ-max ℓ₁ ℓ₂)
 Ops (Endo⁻ {X = X} isSetX) A = El A → X → X
 isSetOps (Endo⁻ isSetX) _ = isSetΠ (const (isSetΠ (const isSetX)))
 id (Endo⁻ isSetX) _ x = x
 comp (Endo⁻ isSetX) A B f fs (a , b) x = f a (fs a b x)
-idl (Endo⁻ isSetX) A f = endo⁻-≡ Σ-Idl (f ∘ snd)
-idr (Endo⁻ isSetX) A f = endo⁻-≡ Σ-Idr (f ∘ fst)
+idl (Endo⁻ isSetX) A f = endo⁻-≡ ΣIdLIso (uncurry f)
+idr (Endo⁻ isSetX) A f = endo⁻-≡ ΣIdRIso (f ∘ fst)
 assoc (Endo⁻ isSetX) A B C f fs fss = endo⁻-≡ Σ-assoc-Iso _

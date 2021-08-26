@@ -44,10 +44,10 @@ private
 [,]-∘-distr _ (inr _) = refl
 
 inl-inj : {x y : A} → inl {B = B} x ≡ inl y → x ≡ y
-inl-inj {x = x} {y = y} = lower ∘ SumPath.encode (inl x) (inl y)
+inl-inj {x = x} {y = y} = lower ∘ ⊎Path.encode (inl x) (inl y)
 
 inr-inj : {x y : B} → inr {A = A} x ≡ inr y → x ≡ y
-inr-inj {x = x} {y = y} = lower ∘ SumPath.encode (inr x) (inr y)
+inr-inj {x = x} {y = y} = lower ∘ ⊎Path.encode (inr x) (inr y)
 
 inl≢inr : {x : A} {y : B} → ¬ (inl {A = A} x ≡ inr {B = B} y)
 inl≢inr p = subst (case⊎ ⊤ ⊥) p _

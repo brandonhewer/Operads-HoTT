@@ -11,8 +11,7 @@ open import Cubical.Foundations.HLevels
 open import Cubical.Foundations.Prelude hiding (comp)
 
 open import Operad.Base
-open import Operad.FinSet.Small
-
+  
 private
   variable
     ℓ₁ ℓ₂ ℓ₃ ℓ₄ : Level

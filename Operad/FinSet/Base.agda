@@ -4,6 +4,7 @@ module Operad.FinSet.Base where
 
 open import Cubical.Data.Nat
 open import Cubical.Data.Sigma
+open import Cubical.Data.Unit
 
 open import Cubical.Foundations.Function
 open import Cubical.Foundations.HLevels
@@ -43,15 +44,21 @@ rec₂ A B p f = rec A p λ a → rec B p (f a)
 isFinite-n : ∀ {ℓ} n → isFinite (Lift {j = ℓ} (Fin n))
 isFinite-n n = n , ∣ invIso LiftIso ∣
 
+isFinite-⊤ : isFinite (Lift {j = ℓ₁} Unit)
+isFinite-⊤ = 1 , ∣ iso (λ _ → zero) (λ _ → _) (λ { zero → refl }) (λ _ → refl) ∣
+
 n-FinSet : ∀ {ℓ} n → FinSet ℓ
 n-FinSet n = _ , isFinite-n n
 
 ⊤-FinSet : ∀ ℓ → FinSet ℓ
-⊤-FinSet ℓ = n-FinSet 1
+⊤-FinSet ℓ = _ , isFinite-⊤
 
-⊥-FinSet : ∀ ℓ → FinSet ℓ
-⊥-FinSet ℓ = n-FinSet 0
+1-FinSet : ∀ ℓ → FinSet ℓ
+1-FinSet ℓ = n-FinSet 1
+
+0-FinSet : ∀ ℓ → FinSet ℓ
+0-FinSet ℓ = n-FinSet 0
 
 LiftFinSet : ∀ {ℓ₁ ℓ₂} → FinSet ℓ₂ → FinSet (ℓ-max ℓ₁ ℓ₂)
 LiftFinSet {ℓ₁} (A , m , p) =
-  Lift {j = ℓ₁} A , m , p-rec propTruncIsProp (∣_∣ ∘ compIso (invIso LiftIso)) p
+  Lift {j = ℓ₁} A , m , p-rec squash (∣_∣ ∘ compIso (invIso LiftIso)) p

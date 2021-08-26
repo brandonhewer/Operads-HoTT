@@ -21,9 +21,9 @@ private
 isFinite⊎ : {A : Type ℓ₁} {B : Type ℓ₂} → isFinite A → isFinite B → isFinite (A ⊎ B)
 isFinite⊎ (m , I′₁) (n , I′₂) =
   m + n ,
-  p-rec propTruncIsProp (λ I₁ →
-    p-rec propTruncIsProp (λ I₂ →
-      ∣ compIso (sumIso I₁ I₂) (Fin⊎↔Fin+ m n) ∣
+  p-rec squash (λ I₁ →
+    p-rec squash (λ I₂ →
+      ∣ compIso (⊎Iso I₁ I₂) (Fin⊎↔Fin+ m n) ∣
     ) I′₂
   ) I′₁
 

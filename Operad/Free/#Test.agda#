@@ -1,0 +1,18 @@
+-- {-# OPTIONS --without-K #-}
+
+open import Level
+open import Relation.Binary.PropositionalEquality
+
+private
+  variable
+    ℓ₁ : Level
+
+uip : {A : Set ℓ₁} {x y : A} (p q : x ≡ y) → p ≡ q
+uip refl refl = {!!}
+
+trans′ : {A : Set ℓ₁} {x y z : A} → x ≡ y → y ≡ z → x ≡ z
+trans′ p q = {!!}
+
+test : {A : Set ℓ₁} (f : A → A) →
+       ∀ a → f a ≡ a → f (f a) ≡ a
+test f a p = {!!}

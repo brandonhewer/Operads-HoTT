@@ -46,5 +46,5 @@ isFinite× isFiniteA isFiniteB =
 Σⁿ : (A : FinSet ℓ₁) (B : ⟦ A ⟧ → FinSet ℓ₂) → FinSet (ℓ-max ℓ₁ ℓ₂)
 Σⁿ = fromClosure Σ ΣFin ΣFin↔FinΣ′
 
-×ⁿ : FinSet ℓ₁ → FinSet ℓ₂ → FinSet (ℓ-max ℓ₁ ℓ₂)
-×ⁿ = fromClosure′ _×_ _*_ ×Fin↔Fin*′
+_×ⁿ_ : FinSet ℓ₁ → FinSet ℓ₂ → FinSet (ℓ-max ℓ₁ ℓ₂)
+_×ⁿ_ = fromClosure′ _×_ _*_ ×Fin↔Fin*′

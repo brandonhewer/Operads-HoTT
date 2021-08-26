@@ -4,6 +4,7 @@ module Operad.FinSet.Properties where
 
 open import Cubical.Data.Empty renaming (rec to ⊥-rec)
 open import Cubical.Data.Nat hiding (snotz; znots)
+open import Cubical.Data.Unit renaming (Unit to ⊤)
 
 open import Cubical.Foundations.Equiv
 open import Cubical.Foundations.Function
@@ -111,7 +112,7 @@ uniqueSize : (p q : isFinite X) → p .fst ≡ q .fst
 uniqueSize (m , p) (n , q) = p-rec₂ (isSetℕ m n) (sameSize m n) p q
 
 isPropIsFinite : isProp (isFinite X)
-isPropIsFinite x y = Σ≡Prop (λ _ → propTruncIsProp) (uniqueSize x y)
+isPropIsFinite x y = Σ≡Prop (λ _ → squash) (uniqueSize x y)
 
 isFinite→isSet : isFinite X → isSet X
 isFinite→isSet (_ , p) = p-rec isPropIsSet (λ I → isOfHLevelRespectIso 2 (invIso I) isSetFin) p
@@ -126,8 +127,8 @@ isDiscreteFinSet : (A : FinSet ℓ₁) → Discrete ⟦ A ⟧
 isDiscreteFinSet (_ , p) = isFinite→Discrete p
 
 isCardPropInj : (A : FinSet ℓ₁) (B : FinSet ℓ₂) → card A ≡ card B → ∥ Iso ⟦ A ⟧ ⟦ B ⟧ ∥
-isCardPropInj A B p = rec A propTruncIsProp λ I₁ →
-                      rec B propTruncIsProp λ I₂ →
+isCardPropInj A B p = rec A squash λ I₁ →
+                      rec B squash λ I₂ →
                       ∣ compIso (subst (λ n → Iso ⟦ A ⟧ (Fin n)) p I₁) (invIso I₂) ∣
 
 ¬isCardPropInj : (A : FinSet ℓ₁) (B : FinSet ℓ₂) → ¬ card A ≡ card B → ¬ ∥ Iso ⟦ A ⟧ ⟦ B ⟧ ∥
@@ -154,11 +155,11 @@ Card1→isContr A p = rec A isPropIsContr λ I →
                           isOfHLevelRespectIso 0 (invIso I)
                             (subst (isContr ∘ Fin) p isContrFin1)
 
-Card1→≡⊤ : {A : FinSet ℓ₁} → 1 ≡ card A → A ≡ ⊤-FinSet ℓ₁
+Card1→≡⊤ : {A : FinSet ℓ₁} → 1 ≡ card A → A ≡ 1-FinSet ℓ₁
 Card1→≡⊤ {A = A} p = Lift≡ _ _ (isContr→≡Fin1 (Card1→isContr A p))
 
 ContrFinSet₁ : isContr (Σ[ A ∈ FinSet ℓ₁ ] 1 ≡ card A)
-ContrFinSet₁ = (⊤-FinSet _ , refl) , λ { (_ , p) → Σ≡Prop (λ _ → isSetℕ _ _) (sym (Card1→≡⊤ p)) }
+ContrFinSet₁ = (1-FinSet _ , refl) , λ { (_ , p) → Σ≡Prop (λ _ → isSetℕ _ _) (sym (Card1→≡⊤ p)) }
 
 isFiniteContr : isContr X → isFinite X
 isFiniteContr (x , p) = 1 , ∣ iso (const zero) (const x) (λ { zero → refl }) (λ _ → p _) ∣
@@ -172,7 +173,7 @@ isFiniteDecProp isPropX (no ¬x) = isFiniteEmpty ¬x
 
 isFiniteRemove : isFinite X → (x : X) → isFinite (Σ[ y ∈ X ] ¬ x ≡ y)
 isFiniteRemove (zero , p)  x = p-rec isPropIsFinite (λ I → ⊥-rec (¬Fin0 (fun I x))) p
-isFiniteRemove (suc n , p) x = n , p-rec propTruncIsProp (λ I →
+isFiniteRemove (suc n , p) x = n , p-rec squash (λ I →
     ∣ compIso (Σ-cong-iso I λ y → Inj→¬Iso (fun I) (isoFunInjective I) x y) (Fin/ n (fun I x)) ∣
   ) p
 
@@ -193,8 +194,8 @@ _⟨_≡_⟩ : (A : FinSet ℓ₁) → ⟦ A ⟧ → ⟦ A ⟧ → FinSet ℓ₁
 (_ , isFiniteA) ⟨ a ≡ b ⟩ = _ , isFiniteFin≡ isFiniteA a b
 
 isFinite¬ : isFinite X → isFinite (¬ X)
-isFinite¬ (zero  , p) = 1 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso0) p
-isFinite¬ (suc n , p) = 0 , p-rec propTruncIsProp (∣_∣ ∘ ¬Iso-suc) p
+isFinite¬ (zero  , p) = 1 , p-rec squash (∣_∣ ∘ ¬Iso0) p
+isFinite¬ (suc n , p) = 0 , p-rec squash (∣_∣ ∘ ¬Iso-suc) p
 
 _⟨_≢_⟩ : (A : FinSet ℓ₁) → ⟦ A ⟧ → ⟦ A ⟧ → FinSet ℓ₁
 A ⟨ a ≢ b ⟩ = _ , isFinite¬ (isFiniteFin≡ (snd A) a b) -- (A ⟨ a ≡ b ⟩)
@@ -209,7 +210,7 @@ isFiniteClosure : (_∙_ : ∀ {ℓ₁ ℓ₂} (A : Type ℓ₁) → (A → Type
 isFiniteClosure _∙_ size is (n , X↔Fin) isFiniteY =
   p-rec isPropIsFinite (λ I →
     size n (fst ∘ isFiniteY ∘ inv I) ,
-    p-rec propTruncIsProp (λ Is →
+    p-rec squash (λ Is →
       ∣
         compIso (congIso₂ _∙_ (compIso I LiftIso) (flip compIso LiftIso ∘ Is ∘ lower))
                 (is n (fst ∘ isFiniteY ∘ inv I))
@@ -222,7 +223,7 @@ isFiniteClosure′ : (_∙_ : ∀ {ℓ₁ ℓ₂} → Type ℓ₁ → Type ℓ�
                    (∀ m n → Iso (Lift (Fin m) ∙ Lift (Fin n)) (Fin (m + n))) →
                    isFinite X → isFinite Y → isFinite (X ∙ Y)
 isFiniteClosure′ _∙_ _+_ is (m , X↔Fin) (n , Y↔Fin) =
-  m + n , p-rec₂ propTruncIsProp (λ Ix Iy →
+  m + n , p-rec₂ squash (λ Ix Iy →
     ∣
       compIso (congIso₂′ _∙_ (compIso Ix LiftIso)
                              (compIso Iy LiftIso))

@@ -124,4 +124,5 @@ Constant n A X with discreteℕ n (card X)
 ... | no ¬p = Lift ⊥ , isProp→isOfHLevelSuc _ λ ()
 
 ⊚-Unit : Species 1 ℓ₁ ℓ₂
-⊚-Unit = Constant {i = 0} 1 (Lift ⊤ , λ { (lift tt) (lift tt) → refl }) 
+⊚-Unit = Constant {i = 0} 1 (Lift ⊤ , λ { (lift tt) (lift tt) → refl })
+

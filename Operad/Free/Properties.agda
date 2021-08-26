@@ -8,6 +8,8 @@ open import Cubical.Foundations.Isomorphism
 open import Cubical.Foundations.Prelude hiding (comp)
 open import Cubical.Foundations.Structure
 
+open import Cubical.Data.FinData
+
 open import Operad.Algebra
 open import Operad.Base
 open import Operad.FinSet.Small
@@ -27,7 +29,7 @@ interpret′ K O f .⊤F unit = id O
 interpret′ K O f .(ΣF A B) (graft A B t ts) =
   comp O A B (interpret′ K O f A t) λ a → interpret′ K O f (B a) (ts a)
 interpret′ K O f .(ΣIdL A i) (fidl A t i) =
-  idl O A (interpret′ K O f A t) i
+  idl O A (λ a → interpret′ K O f (A a) (t a)) i
 interpret′ K O f .(ΣIdR A i) (fidr A t i) =
   idr O A (interpret′ K O f A t) i
 interpret′ K O f .(ΣAssoc A B C i) (fassoc A B C t ts tss i) =
@@ -59,13 +61,12 @@ unique-interpret K O f g p .(ΣF A B) (graft A B t ts) =
   ∘-resp g A B t ts ∙ cong₂ (comp O A B) (unique-interpret K O f g p A t)
                             (funExt λ a → unique-interpret K O f g p (B a) (ts a))
 unique-interpret K O f g p .(ΣIdL A i) (fidl A t i) =
-  let q = unique-interpret K O f g p A t
-   in isProp→PathP (λ i → isSetOps O (ΣIdL A i)
-                                     (⟪ g ⟫ (fidl A t i))
-                                     (idl O A (interpret′ K O f A t) i))
-                   (∘-resp g ⊤F (λ _ → A) unit (λ _ → t) ∙
-                           λ j → comp O ⊤F (λ _ → A) (id-resp g j) (λ _ → q j))
-                   q i
+  isProp→PathP (λ i → isSetOps O (ΣIdL A i)
+                                 (⟪ g ⟫ (fidl A t i))
+                                 (idl O A (λ a → interpret′ K O f (A a) (t a)) i))
+               (∘-resp g ⊤F A unit t ∙
+                       λ j → comp O ⊤F A (id-resp g j) λ a → unique-interpret K O f g p (A a) (t a) j)
+               (λ i → unique-interpret K O f g p (A (lift zero)) (t (lift zero)) i) i
 unique-interpret K O f g p .(ΣIdR A i) (fidr A t i) =
   let q = unique-interpret K O f g p A t
    in isProp→PathP (λ i → isSetOps O (ΣIdR A i)
@@ -144,3 +145,28 @@ inv (FreeAlg↔ΣΠ K)                     = uncurry ΣΠ→FreeAlg
 rightInv (FreeAlg↔ΣΠ K) _              = refl
 Carrier (leftInv (FreeAlg↔ΣΠ K) alg i) = Carrier alg
 run-alg (leftInv (FreeAlg↔ΣΠ K) alg i) = sym (FreeAlg-run alg) i
+
+open import Operad.FinSet
+
+ConFreeAlg : {U : Type ℓ₁} {E : U → Type ℓ₂} {X : Type ℓ₃} →
+             Iso ((A : FinSet ℓ₂) (u : U) → E u ≡ ⟦ A ⟧ → (⟦ A ⟧ → X) → X)
+                 ((u : U) → isFinite (E u) → (E u → X) → X)
+fun      ConFreeAlg f u isFiniteEu g =
+  f (_ , isFiniteEu) u refl g
+inv      ConFreeAlg f A u p g =
+  f u (subst isFinite (sym p) (snd A)) (g ∘ transport p)
+rightInv ConFreeAlg f i u isFiniteEu g =
+  f u (substRefl {B = isFinite} isFiniteEu i) λ e → cong g (transportRefl e) i
+leftInv  ConFreeAlg f i A u p g =
+  f (p i , isProp→PathP (λ i → isPropIsFinite {X = p i})
+                        (subst isFinite (sym p) (snd A)) (snd A) i)
+    u (λ j → p (i ∧ j)) λ x → g (transp (λ j → p (i ∨ j)) i x)
+
+DFConFreeAlg : {U : Type ℓ₁} {E : U → FinSet ℓ₂} {X : Type ℓ₃} →
+               Iso ((A : FinSet ℓ₂) (u : U) → E u ≡ A → (⟦ A ⟧ → X) → X)
+                   ((u : U) → (⟦ E u ⟧ → X) → X)
+fun      (DFConFreeAlg {E = E}) f u g = f (E u) u refl g
+inv      DFConFreeAlg f A u p g = f u (g ∘ transport (cong ⟦_⟧ p))
+rightInv DFConFreeAlg f i u g = f u λ e → cong g (transportRefl e) i
+leftInv  DFConFreeAlg f i A u p g =
+  f (p i) u (λ j → p (i ∧ j)) λ x → g (transp (λ j → ⟦ p (i ∨ j) ⟧) i x)
