@@ -1,0 +1,3 @@
+comp O (ΣF (Idx x) (λ i → ⊤F)) (λ z → ⊤F)
+(comp O (Idx x) (λ _ → ⊤F) (Op x) (λ i → id O))
+(λ i → _1209 (x = x) (i = i))
