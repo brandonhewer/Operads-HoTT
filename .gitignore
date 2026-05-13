@@ -1,3 +1,4 @@
 *.agda~
 *.agdai
 .DS_STORE
+.claude
