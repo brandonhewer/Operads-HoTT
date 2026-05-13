@@ -1552,19 +1552,8 @@ private
       symP (subst-filler IExpr (sym (+-zero (sum (B fzero) (C fzero))))
                               (Xinner-id↑ B C ks kss))
 
-  -- Composed PathP from lhs-id↑ to rhs-id↑ via outer-id↑ then bridge-id↑.
-  opaque
-    unfolding outer-id↑ bridge-id↑
-    my-PathP-id↑ : (B : Fin 1 → ℕ) (C : (a : Fin 1) → Fin (B a) → ℕ)
-                   (ks : (a : Fin 1) → IExpr (B a))
-                   (kss : (a : Fin 1) (b : Fin (B a)) → IExpr (C a b))
-                 → PathP (λ i → IExpr ((+-zero (sum (B fzero) (C fzero))
-                                       ∙ (λ j → sum (sym (+-zero (B fzero)) j)
-                                                     (B-path-id↑ B C j))) i))
-                         (lhs-id↑ B C ks kss) (rhs-id↑ B C ks kss)
-    my-PathP-id↑ B C ks kss =
-      compPathP' {B = IExpr} (outer-id↑ B C ks kss) (bridge-id↑ B C ks kss)
-
+  -- Pure ℕ-equality witnessing the composed index path. Sealed independently
+  -- so downstream consumers (e.g. IExpr-assoc-id↑) treat it as a black box.
   opaque
     chosen-path-id↑ : (B : Fin 1 → ℕ) (C : (a : Fin 1) → Fin (B a) → ℕ)
                     → sum (B fzero) (C fzero) + 0
@@ -1573,9 +1562,26 @@ private
       +-zero (sum (B fzero) (C fzero))
       ∙ (λ i → sum (sym (+-zero (B fzero)) i) (B-path-id↑ B C i))
 
-  -- The id↑ case of IExpr-assoc, assembled from the pieces above.
+  -- Composed PathP from lhs-id↑ to rhs-id↑ via outer-id↑ then bridge-id↑.
+  -- The declared type names chosen-path-id↑ (rather than inlining the hcomp);
+  -- this lets IExpr-assoc-id↑'s subst match its motive by name without ever
+  -- unfolding chosen-path-id↑. The unfolding cost is paid here, once.
   opaque
-    unfolding lhs-id↑ rhs-id↑ my-PathP-id↑ chosen-path-id↑
+    unfolding chosen-path-id↑
+    my-PathP-id↑ : (B : Fin 1 → ℕ) (C : (a : Fin 1) → Fin (B a) → ℕ)
+                   (ks : (a : Fin 1) → IExpr (B a))
+                   (kss : (a : Fin 1) (b : Fin (B a)) → IExpr (C a b))
+                 → PathP (λ i → IExpr (chosen-path-id↑ B C i))
+                         (lhs-id↑ B C ks kss) (rhs-id↑ B C ks kss)
+    my-PathP-id↑ B C ks kss =
+      compPathP' {B = IExpr} (outer-id↑ B C ks kss) (bridge-id↑ B C ks kss)
+
+  -- The id↑ case of IExpr-assoc, assembled from the pieces above. Only
+  -- lhs-id↑/rhs-id↑ need unfolding (so subst's motive matches the declared
+  -- return type using IExpr-comp directly); my-PathP-id↑ and chosen-path-id↑
+  -- are consumed by reference, not pattern-matched.
+  opaque
+    unfolding lhs-id↑ rhs-id↑
     IExpr-assoc-id↑ : (B : Fin 1 → ℕ)
                       (C : (a : Fin 1) → Fin (B a) → ℕ)
                       (ks : (a : Fin 1) → IExpr (B a))
@@ -1830,9 +1836,10 @@ private
                        (IExpr-comp-add↑-lemma m n B e₁ e₂ ks)
                        (symP (es-path-add↑ m n B C kss))
 
+  -- chosen-path-add↑ is purely an ℕ-equality; it does not need any of the
+  -- step-* helpers unfolded. Sealed in its own opaque block so downstream
+  -- consumers (e.g. IExpr-assoc-add↑) treat it as a black box.
   opaque
-    unfolding step-A-add↑ step-B-add↑ step-C-add↑ step-D-add↑
-
     chosen-path-add↑ : (m n : ℕ) (B : Fin (m + n) → ℕ)
                        (C : (a : Fin (m + n)) → Fin (B a) → ℕ)
                      → sum (m + n) (λ a → sum (B a) (C a))
@@ -1849,6 +1856,9 @@ private
         ∙ sym (sum-split (sum m (B ∘ injL m n)) (sum n (B ∘ injR m n))
                           (joint-C' m n B C)))
       ∙ (λ i → sum (sym (sum-split m n B) i) (symP (B-path-add↑ m n B C) i))
+
+  opaque
+    unfolding chosen-path-add↑ step-A-add↑ step-B-add↑ step-C-add↑ step-D-add↑
 
     composite-add↑ : (m n : ℕ) (B : Fin (m + n) → ℕ)
                      (C : (a : Fin (m + n)) → Fin (B a) → ℕ)
@@ -1874,8 +1884,12 @@ private
           (compPathP' {B = IExpr} (step-C-add↑ m n B C e₁ e₂ ks kss)
                                    (step-D-add↑ m n B C e₁ e₂ ks kss)))
 
+  -- IExpr-assoc-add↑ only needs lhs-add↑/rhs-add↑ unfolded so the subst's
+  -- motive matches the declared return type. composite-add↑ is passed as a
+  -- value (its type matches the motive by name); chosen-path-add↑ is referenced
+  -- only inside isSetℕ where syntactic equality suffices.
   opaque
-    unfolding lhs-add↑ rhs-add↑ chosen-path-add↑ composite-add↑
+    unfolding lhs-add↑ rhs-add↑
 
     IExpr-assoc-add↑ : (m n : ℕ) (B : Fin (m + n) → ℕ)
                        (C : (a : Fin (m + n)) → Fin (B a) → ℕ)

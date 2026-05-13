@@ -345,12 +345,21 @@ opaque
 -- with Inj (⅀Idr≃ (A₁ ⊎̂ A₂)).
 ------------------------------------------------------------------------
 opaque
-  unfolding ⊎̂-distr-path
+  -- `unfolding un` is required because the chain below bridges
+  -- `cong fst (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))` (which unfolds via
+  -- `⊎̂-distr-path` to `cong fst (un … distr)`) with `ua distr` via
+  -- `cong-fst-Σ≡Prop _ (ua distr)`. That bridge needs `un` to reduce
+  -- to `Σ≡Prop _ (ua _)`. (Previously this worked through implicit
+  -- normalisation when isFinSetΣ was transparent; with `isFinSetΣ-op`
+  -- opaque the unifier no longer finds it on its own.)
+  unfolding ⊎̂-distr-path un
 
   sym-idr-add↑-path : (A₁ A₂ : FinSet ℓ-zero)
                     → sym (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))
-                      ∙ cong₂ _⊎̂_ (Inj (⅀Idr≃ A₁)) (Inj (⅀Idr≃ A₂))
-                    ≡ Inj (⅀Idr≃ (A₁ ⊎̂ A₂))
+                      ∙ cong₂ _⊎̂_ (Inj {A = ⅀ A₁ (λ _ → 𝜏)} {B = A₁} (⅀Idr≃ A₁))
+                                   (Inj {A = ⅀ A₂ (λ _ → 𝜏)} {B = A₂} (⅀Idr≃ A₂))
+                    ≡ Inj {A = ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏)} {B = A₁ ⊎̂ A₂}
+                          (⅀Idr≃ (A₁ ⊎̂ A₂))
   sym-idr-add↑-path A₁ A₂ =
     Σ≡Prop-inj (λ _ → isPropIsFinSet) _ _ fst-eq
     where
@@ -366,28 +375,56 @@ opaque
       composite≡⅀Idr = equivEq (funExt λ { (inl _ , _) → refl
                                           ; (inr _ , _) → refl })
 
+      -- Under opaque `isFinSetΣ-op`, Agda cannot infer Inj's `{A B : FinSet}`
+      -- implicit args from `El A ≃ El B` alone (multiple FinSets share an
+      -- underlying type), so they are spelled out at each call below.
+      Inj-Idr₁ : ⅀ A₁ (λ _ → 𝜏) ≡ A₁
+      Inj-Idr₁ = Inj {A = ⅀ A₁ (λ _ → 𝜏)} {B = A₁} (⅀Idr≃ A₁)
+
+      Inj-Idr₂ : ⅀ A₂ (λ _ → 𝜏) ≡ A₂
+      Inj-Idr₂ = Inj {A = ⅀ A₂ (λ _ → 𝜏)} {B = A₂} (⅀Idr≃ A₂)
+
+      Inj-Idr-sum : ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏) ≡ (A₁ ⊎̂ A₂)
+      Inj-Idr-sum = Inj {A = ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏)} {B = A₁ ⊎̂ A₂}
+                        (⅀Idr≃ (A₁ ⊎̂ A₂))
+
       fst-LHS-step₁ : cong fst (sym (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))
-                                ∙ cong₂ _⊎̂_ (Inj (⅀Idr≃ A₁)) (Inj (⅀Idr≃ A₂)))
+                                ∙ cong₂ _⊎̂_ Inj-Idr₁ Inj-Idr₂)
                     ≡ sym (cong fst (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏)))
-                      ∙ cong₂ _⊎_ (cong fst (Inj (⅀Idr≃ A₁)))
-                                  (cong fst (Inj (⅀Idr≃ A₂)))
-      fst-LHS-step₁ = cong-∙ fst _ _
+                      ∙ cong₂ _⊎_ (cong fst Inj-Idr₁)
+                                  (cong fst Inj-Idr₂)
+      fst-LHS-step₁ =
+        cong-∙ fst (sym (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏)))
+                    (cong₂ _⊎̂_ Inj-Idr₁ Inj-Idr₂)
 
       fst-eq : cong fst (sym (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))
-                         ∙ cong₂ _⊎̂_ (Inj (⅀Idr≃ A₁)) (Inj (⅀Idr≃ A₂)))
-             ≡ cong fst (Inj (⅀Idr≃ (A₁ ⊎̂ A₂)))
+                         ∙ cong₂ _⊎̂_ Inj-Idr₁ Inj-Idr₂)
+             ≡ cong fst Inj-Idr-sum
       fst-eq =
           fst-LHS-step₁
         ∙ cong₂ _∙_
-            (cong sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet) (ua distr)))
-            (cong₂ (cong₂ _⊎_)
-              (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet) (ua (⅀Idr≃ A₁)))
-              (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet) (ua (⅀Idr≃ A₂))))
+            (cong sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                         {u = ⅀ A₁ (λ _ → 𝜏) ⊎̂ ⅀ A₂ (λ _ → 𝜏)}
+                         {v = ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏)}
+                         (ua distr)))
+            -- Inlined as a path-of-paths. With isFinSetΣ-op opaque, the
+            -- surrounding FinSet types no longer reduce, and Agda fails to
+            -- solve the higher-order meta needed to apply
+            -- `cong₂ (cong₂ _⊎_)` here. The explicit `λ i → ...` form
+            -- side-steps the meta entirely.
+            (λ i → cong₂ _⊎_ (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                                  {u = ⅀ A₁ (λ _ → 𝜏)} {v = A₁}
+                                  (ua (⅀Idr≃ A₁)) i)
+                              (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                                  {u = ⅀ A₂ (λ _ → 𝜏)} {v = A₂}
+                                  (ua (⅀Idr≃ A₂)) i))
         ∙ cong (λ p → sym (ua distr) ∙ p) (ua-⊎ (⅀Idr≃ A₁) (⅀Idr≃ A₂))
         ∙ cong (_∙ ua (⊎-equiv (⅀Idr≃ A₁) (⅀Idr≃ A₂))) (sym (uaInvEquiv distr))
         ∙ sym (uaCompEquiv (invEquiv distr) (⊎-equiv (⅀Idr≃ A₁) (⅀Idr≃ A₂)))
         ∙ cong ua composite≡⅀Idr
-        ∙ sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet) (ua (⅀Idr≃ (A₁ ⊎̂ A₂))))
+        ∙ sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                  {u = ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏)} {v = A₁ ⊎̂ A₂}
+                  (ua (⅀Idr≃ (A₁ ⊎̂ A₂))))
 
 ------------------------------------------------------------------------
 -- sym-idl: the operadic left-identity law.  The proof mirrors the IExpr
@@ -412,17 +449,23 @@ opaque
   sym-idr : (A : FinSet ℓ-zero) (k : SymExpr A)
           → PathP (λ i → SymExpr (Inj {A = ⅀ A (λ _ → 𝜏)} {B = A} (⅀Idr≃ A) i))
                   (sym-comp A (λ _ → 𝜏) k (λ _ → id↑)) k
-  sym-idr .𝜏 id↑ =
+  -- The dot-patterns `.𝜏`, `.∅̂`, `.(_ ⊎̂ _)` worked when ⅀FS was transparent
+  -- but fail under opaque isFinSetΣ-op: Agda's parser interprets `.𝜏` as a
+  -- copattern projection because `𝜏` is in scope as a record-field name from
+  -- `open UniverseHelpers 𝓕`. Bare variable patterns let Agda recover the
+  -- index of the SymExpr constructor (`id↑ : SymExpr 𝜏`, `val↑ _ : SymExpr ∅̂`,
+  -- `add↑ … : SymExpr (_ ⊎̂ _)`) without going through the ambiguous syntax.
+  sym-idr _ id↑ =
     subst (λ p → PathP (λ i → SymExpr (p i))
                        (sym-comp 𝜏 (λ _ → 𝜏) id↑ (λ _ → id↑)) id↑)
           sym-idr-id↑-path
           (symP (subst-filler SymExpr (𝜏-Σ-path (λ _ → 𝜏)) id↑))
-  sym-idr .∅̂ (val↑ n) =
+  sym-idr _ (val↑ n) =
     subst (λ p → PathP (λ i → SymExpr (p i))
                        (sym-comp ∅̂ (λ _ → 𝜏) (val↑ n) (λ _ → id↑)) (val↑ n))
           sym-idr-val↑-path
           (symP (subst-filler SymExpr (∅̂-Σ-path (λ _ → 𝜏)) (val↑ n)))
-  sym-idr .(_ ⊎̂ _) (add↑ {A₁} {A₂} e₁ e₂) =
+  sym-idr _ (add↑ {A₁} {A₂} e₁ e₂) =
     subst (λ p → PathP (λ i → SymExpr (p i))
                        (sym-comp (A₁ ⊎̂ A₂) (λ _ → 𝜏) (add↑ e₁ e₂) (λ _ → id↑))
                        (add↑ e₁ e₂))
@@ -438,7 +481,10 @@ opaque
                           (add↑ recL recR)
       filler-path = symP (subst-filler SymExpr (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))
                                                 (add↑ recL recR))
-      add↑-path : PathP (λ i → SymExpr (Inj (⅀Idr≃ A₁) i ⊎̂ Inj (⅀Idr≃ A₂) i))
+      add↑-path : PathP (λ i → SymExpr (Inj {A = ⅀ A₁ (λ _ → 𝜏)} {B = A₁}
+                                              (⅀Idr≃ A₁) i
+                                          ⊎̂ Inj {A = ⅀ A₂ (λ _ → 𝜏)} {B = A₂}
+                                                  (⅀Idr≃ A₂) i))
                          (add↑ recL recR) (add↑ e₁ e₂)
       add↑-path i = add↑ (sym-idr A₁ e₁ i) (sym-idr A₂ e₂ i)
 

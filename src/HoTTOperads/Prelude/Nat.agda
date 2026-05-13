@@ -368,3 +368,26 @@ opaque
                   → e ≡ pathToEquiv (cong Fin p)
   equivFin-by-fst e p hyp =
     equivEq (funExt λ k → Fin-fst-≡ (hyp k ∙ sym (transport-Fin-fst p k)))
+
+------------------------------------------------------------------------
+-- Impossibility eliminators for the `with k ≤? bound` pattern.
+-- The structure is always: `with k ≤? bound`; one branch is the real
+-- proof and the other branch derives `bound ≤ k` together with `k < bound`,
+-- which is absurd. These helpers name that absurdity once.
+------------------------------------------------------------------------
+
+absurd-≤? : {X : Type ℓ} {k bound : ℕ} → bound ≤ k → k < bound → X
+absurd-≤? B≤k k<B = ⊥-rec (¬m<m (≤<-trans B≤k k<B))
+
+absurd-+-≤? : {X : Type ℓ} {b k : ℕ} → (b + k) < b → X
+absurd-+-≤? {b = b} {k = k} = ⊥-rec ∘ ¬m+n<m {m = b} {n = k}
+
+------------------------------------------------------------------------
+-- Building a path B i ≡ B j over Fin n from a fst-path. The Fin-fst-≡
+-- + cong combination is one of the most-repeated idioms in the operadic
+-- proofs (~40 occurrences in IExpr alone).
+------------------------------------------------------------------------
+
+cong-Fin-fst : ∀ {ℓ'} {n : ℕ} {B : Fin n → Type ℓ'}
+               {i j : Fin n} → fst i ≡ fst j → B i ≡ B j
+cong-Fin-fst {B = B} p = cong B (Fin-fst-≡ p)

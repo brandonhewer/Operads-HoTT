@@ -24,12 +24,22 @@ private
 El-FS : FinSet ℓ → Type ℓ
 El-FS A = A .fst
 
+-- Local opaque wrapper around the *expensive* FinSet-stdlib witness for Σ.
+-- The recursive card-arithmetic in `isFinSetΣ`'s first projection plus the
+-- truncation in its second was the dominant cost when `⅀FS A B` reduced
+-- across operadic proofs; sealing the entire pair prevents that expansion.
+opaque
+  isFinSetΣ-op : (A : FinSet ℓ) (B : El-FS A → FinSet ℓ)
+               → isFinSet (Σ[ a ∈ El-FS A ] El-FS (B a))
+  isFinSetΣ-op A B = isFinSetΣ A B
+
 -- Dependent sum of finite sets: ⅀ A B carries the underlying Σ-type with its finite-set proof.
 ⅀FS : (A : FinSet ℓ) → (El-FS A → FinSet ℓ) → FinSet ℓ
 ⅀FS A B = (Σ[ a ∈ El-FS A ] El-FS (B a))
-        , isFinSetΣ A (λ a → B a)
+        , isFinSetΣ-op A (λ a → B a)
 
--- The unit finite set.
+-- The unit finite set. isFinSetUnit is kept transparent because downstream
+-- dot-patterns on `𝜏` (e.g. `sym-idr .𝜏 id↑`) need this to reduce.
 𝜏FS : FinSet ℓ
 𝜏FS = Unit , isFinSetUnit
 
