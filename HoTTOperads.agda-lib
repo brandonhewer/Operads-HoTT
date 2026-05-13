@@ -1,0 +1,4 @@
+name: HoTTOperads
+include: src
+flags: --cubical --no-import-sorts -WnoUnsupportedIndexedMatch
+
