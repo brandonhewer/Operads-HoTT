@@ -351,6 +351,21 @@ module _ {𝒰 : Universe ℓc ℓe} where
           pair-eq = ΣPathP ( sym (transportRefl a)
                           , λ i → transport-filler (cong El (funExt⁻ B-path a)) c (~ i))
 
+  -- Equivalence-form of `transp-⅀-subst-path`: `pathToEquiv (cong El (⅀-subst-path p C))`
+  -- factors as `⟦⅀⟧ ⨟ Σ-cong-equiv-fst (pathToEquiv (cong El p)) ⨟ invEquiv ⟦⅀⟧`.
+  -- One-line consequence of `transp-⅀-subst-path` via `equivEq + funExt`, since
+  -- `equivFun (pathToEquiv P) ≡ transport P` and `equivFun (Σ-cong-equiv-fst e) (a, b)
+  -- ≡ (equivFun e a, b)` definitionally.
+  opaque
+    ⅀-subst-path-equiv :
+      {A A' : Code} (p : A ≡ A') (C : El A' → Code)
+      → pathToEquiv (cong El (⅀-subst-path p C))
+      ≡ compEquiv (⟦⅀⟧ A (λ a → C (transport (cong El p) a)))
+                  (compEquiv (Σ-cong-equiv-fst {B = λ a → El (C a)}
+                                (pathToEquiv (cong El p)))
+                             (invEquiv (⟦⅀⟧ A' C)))
+    ⅀-subst-path-equiv p C = equivEq (funExt (transp-⅀-subst-path p C))
+
   -- Sanity probe: `⅀Assoc-C' A B C` unfolds definitionally to its `η`-form on Σ,
   -- i.e. `λ ab → C (fst (⟦⅀⟧ ab)) (snd (⟦⅀⟧ ab))`. We record this with `refl` so
   -- downstream `cong`s can rewrite under it without needing to unfold `⅀Assoc-C'`
