@@ -5,13 +5,14 @@ open import Cubical.Foundations.Prelude
 open import Cubical.Foundations.Function using (_∘_)
 open import Cubical.Foundations.HLevels
 open import Cubical.Foundations.Equiv using (_≃_ ; invEq ; equivEq ; invEquiv ; compEquiv
-                                              ; idEquiv ; secEq ; retEq)
+                                              ; idEquiv ; secEq ; retEq ; equivFun)
 open import Cubical.Foundations.Isomorphism using (Iso ; iso ; isoToEquiv)
 open import Cubical.Foundations.Univalence using (ua ; uaInvEquiv ; uaCompEquiv ; uaIdEquiv ; EquivJ
-                                                   ; pathToEquiv ; ua-pathToEquiv ; uaβ)
+                                                   ; pathToEquiv ; ua-pathToEquiv ; uaβ ; ua-unglue
+                                                   ; unglue)
 open import Cubical.Data.Sigma.Properties using (Σ-assoc-≃ ; Σ-cong-equiv-fst ; Σ-cong-equiv-snd)
 open import Cubical.Foundations.GroupoidLaws using (cong-∙)
-open import Cubical.Functions.FunExtEquiv using (funExtDep)
+open import Cubical.Functions.FunExtEquiv using (funExtDep ; funExtDepEquiv)
 open import Cubical.Data.FinSet.Base using (FinSet ; isGroupoidFinSet ; isPropIsFinSet)
 open import Cubical.Data.FinSet.Properties using (isFinSet⊥)
 open import Cubical.Data.FinSet.Constructors using (isFinSet⊎)
@@ -66,14 +67,18 @@ distr-iso : (A₁ A₂ : FinSet ℓ-zero) (B : El (A₁ ⊎̂ A₂) → FinSet �
           → Iso ((Σ (El A₁) (λ a → El (B (inl a))))
                  ⊎ (Σ (El A₂) (λ a → El (B (inr a)))))
                 (Σ (El A₁ ⊎ El A₂) (λ x → El (B x)))
-Iso.fun (distr-iso _ _ _) (inl (a , b)) = inl a , b
-Iso.fun (distr-iso _ _ _) (inr (a , b)) = inr a , b
+-- `fun` and `leftInv` are written uniformly with `fst`/`snd` (relying
+-- on Σ-η) instead of pattern matching on `(a , b)`.  This makes
+-- `Iso.fun distr-iso (inl ab)` reduce on a generic `ab`, which the
+-- add↑-case boundary checks rely on.
+Iso.fun (distr-iso _ _ _) (inl ab) = inl (fst ab) , snd ab
+Iso.fun (distr-iso _ _ _) (inr ab) = inr (fst ab) , snd ab
 Iso.inv (distr-iso _ _ _) (inl a , b) = inl (a , b)
 Iso.inv (distr-iso _ _ _) (inr a , b) = inr (a , b)
 Iso.rightInv (distr-iso _ _ _) (inl _ , _) = refl
 Iso.rightInv (distr-iso _ _ _) (inr _ , _) = refl
-Iso.leftInv (distr-iso _ _ _) (inl (_ , _)) = refl
-Iso.leftInv (distr-iso _ _ _) (inr (_ , _)) = refl
+Iso.leftInv (distr-iso _ _ _) (inl _) = refl
+Iso.leftInv (distr-iso _ _ _) (inr _) = refl
 
 opaque
   𝜏-Σ-path : (B : El 𝜏 → FinSet ℓ-zero) → B tt ≡ ⅀ 𝜏 B
@@ -366,6 +371,36 @@ opaque
         ∙ cong ua (sym ⊎-id-≡-id)
 
 ------------------------------------------------------------------------
+-- Σ-cong over an ua-path on the first factor, identified with ua of
+-- Σ-cong-equiv-fst.  Like ua-⊎, by EquivJ reduction to the identity case.
+-- The Σ-of-paths form `λ i → Σ (ua e i) (G ∘ ua-unglue e i)` is what
+-- emerges from `cong fst` on FinSet paths built via the universe's `un`.
+------------------------------------------------------------------------
+opaque
+  Σ-cong-equiv-fst-ua : {A A' : Type ℓ-zero} (e : A ≃ A') (G : A' → Type ℓ-zero)
+                      → (λ i → Σ (ua e i) (λ x → G (ua-unglue e i x)))
+                      ≡ ua (Σ-cong-equiv-fst {B = G} e)
+  Σ-cong-equiv-fst-ua {A' = A'} e G =
+    EquivJ (λ A e → (λ i → Σ (ua e i) (λ x → G (ua-unglue e i x)))
+                  ≡ ua (Σ-cong-equiv-fst {B = G} e))
+           base-case e
+    where
+      Σ-cong-id-≡-id : Σ-cong-equiv-fst {B = G} (idEquiv A') ≡ idEquiv (Σ A' G)
+      Σ-cong-id-≡-id = equivEq (funExt λ { (_ , _) → refl })
+
+      -- Smoother base-case path that varies the Glue domain in j synchronously
+      -- with the unglue projection.  At j=0: the LHS of base-case (uaIdEquiv 0 i
+      -- = ua (idEquiv A') i and unglue (~i ∨ i) = ua-unglue (idEquiv A') i).
+      -- At j=1: Σ A' G (constant), since uaIdEquiv 1 i = A' and unglue i1 = id.
+      base-case : (λ i → Σ (ua (idEquiv A') i) (λ x → G (ua-unglue (idEquiv A') i x)))
+                ≡ ua (Σ-cong-equiv-fst {B = G} (idEquiv A'))
+      base-case =
+          (λ j i → Σ (uaIdEquiv {A = A'} j i)
+                     (λ x → G (unglue (j ∨ ~ i ∨ i) x)))
+        ∙ sym uaIdEquiv
+        ∙ cong ua (sym Σ-cong-id-≡-id)
+
+------------------------------------------------------------------------
 -- The add↑ path-equality.  Combines the sym of the distributivity path with
 -- the ⊎̂-action of the IH-induced index paths, identifying the composite
 -- with Inj (⅀Idr≃ (A₁ ⊎̂ A₂)).
@@ -616,33 +651,771 @@ opaque
 
 private
   opaque
-    unfolding 𝜏-Σ-path un cong-fst-Σ≡Prop
-    -- Computes the transport of `B tt`-elements along `𝜏-Σ-path B` to the
-    -- explicit pair `(tt , a)`.  Sealed once and consumed by name later;
-    -- callers never need to re-unfold `un` or `cong-fst-Σ≡Prop`.
-    transp-El-𝜏-Σ-path : (B : El 𝜏 → FinSet ℓ-zero) (a : El (B tt))
-                       → transport (λ i → El (𝜏-Σ-path B i)) a ≡ (tt , a)
-    transp-El-𝜏-Σ-path B a =
-        cong (λ p → transport p a)
-             (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
-                              {u = B tt} {v = ⅀ 𝜏 B}
-                              (ua (Σ-idl-≃ {A = El ∘ B})))
-      ∙ uaβ (Σ-idl-≃ {A = El ∘ B}) a
-
-  opaque
-    -- The aligning family-PathP between `C tt` and `⅀Assoc-C' 𝜏 B C`.
-    -- By Unit-η, `⅀Assoc-C' 𝜏 B C a = C tt (snd a)`, so the path
-    -- reduces to `cong (C tt)` of an `a₀ ≡ snd a₁` extracted from
-    -- a-path via `transp-El-𝜏-Σ-path` + `fromPathP`.
+    unfolding 𝜏-Σ-path un
+    -- B-path-id↑ via `ua-unglue`: with `𝜏-Σ-path B = Σ≡Prop pp (ua Σ-idl-≃)`,
+    -- the underlying type-path `cong El (𝜏-Σ-path B)` reduces definitionally
+    -- to `ua Σ-idl-≃` (because `cong fst (Σ≡Prop pp p) = p` is definitional
+    -- in Cubical via the `ΣPathP`-style construction inside Σ≡Prop).  So
+    -- `El (𝜏-Σ-path B i) = ua (Σ-idl-≃ {A = El ∘ B}) i` definitionally.
+    -- We then use `ua-unglue Σ-idl-≃ i a` to bring `a` to `El (⅀ 𝜏 B)`,
+    -- and apply `⅀Assoc-C' 𝜏 B C`.  At i=0 this is `C tt a` (Unit-η on
+    -- `fst (tt, a)`); at i=1 this is `⅀Assoc-C' 𝜏 B C a`.  Both boundary
+    -- reductions are *definitional*, so consumers (`es-path-id↑`,
+    -- `bridge-id↑`, the path-equality lemma) typecheck cleanly without
+    -- the funExtDep + Glue-elimination dance.
     B-path-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
                  (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
                → PathP (λ i → El (𝜏-Σ-path B i) → FinSet ℓ-zero)
                        (C tt) (⅀Assoc-C' 𝜏 B C)
-    B-path-id↑ B C = funExtDep λ {a₀} {a₁} a-path →
-      cong (λ p → C (fst p) (snd p))
-           (sym (transp-El-𝜏-Σ-path B a₀) ∙ fromPathP a-path)
+    B-path-id↑ B C i a =
+      ⅀Assoc-C' 𝜏 B C (ua-unglue (Σ-idl-≃ {A = El ∘ B}) i a)
 
-postulate
+  opaque
+    unfolding 𝜏-Σ-path un B-path-id↑
+    -- es-path-id↑ via the same `ua-unglue` machinery.  The motive
+    -- `SymExpr (B-path-id↑ B C i a)` reduces definitionally to
+    -- `SymExpr (⅀Assoc-C' 𝜏 B C (ua-unglue Σ-idl-≃ i a))` =
+    -- `SymExpr (C tt (snd (ua-unglue Σ-idl-≃ i a)))` (Unit-η).
+    -- The body `kss tt (snd (ua-unglue …))` matches at both boundaries.
+    es-path-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                  (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                  (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+                → PathP (λ i → (a : El (𝜏-Σ-path B i))
+                              → SymExpr (B-path-id↑ B C i a))
+                        (kss tt)
+                        (λ ab → kss (fst ab) (snd ab))
+    es-path-id↑ B C kss i a =
+      kss tt (snd (ua-unglue (Σ-idl-≃ {A = El ∘ B}) i a))
+
+  -- The three endpoints of the id↑-case PathP and their bridges.
+  opaque
+    Xinner-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                 (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                 (ks : (a : El 𝜏) → SymExpr (B a))
+                 (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+               → SymExpr (⅀ (B tt) (C tt))
+    Xinner-id↑ B C ks kss = sym-comp (B tt) (C tt) (ks tt) (kss tt)
+
+  opaque
+    unfolding Xinner-id↑
+    lhs-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+              (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+              (ks : (a : El 𝜏) → SymExpr (B a))
+              (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+            → SymExpr (⅀ 𝜏 (λ a → ⅀ (B a) (C a)))
+    lhs-id↑ B C ks kss =
+      subst SymExpr (𝜏-Σ-path (λ a → ⅀ (B a) (C a))) (Xinner-id↑ B C ks kss)
+
+  opaque
+    rhs-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+              (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+              (ks : (a : El 𝜏) → SymExpr (B a))
+              (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+            → SymExpr (⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))
+    rhs-id↑ B C ks kss =
+      sym-comp (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)
+               (subst SymExpr (𝜏-Σ-path B) (ks tt))
+               (λ ab → kss (fst ab) (snd ab))
+
+  opaque
+    unfolding Xinner-id↑ rhs-id↑ sym-comp-PathP
+    -- Recipe (b): sym-comp-PathP over 𝜏-Σ-path B with B-path-id↑ and es-path-id↑.
+    bridge-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                 (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                 (ks : (a : El 𝜏) → SymExpr (B a))
+                 (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+               → PathP (λ i → SymExpr (⅀ (𝜏-Σ-path B i) (B-path-id↑ B C i)))
+                       (Xinner-id↑ B C ks kss)
+                       (rhs-id↑ B C ks kss)
+    bridge-id↑ B C ks kss =
+      sym-comp-PathP (𝜏-Σ-path B) (B-path-id↑ B C)
+                     (subst-filler SymExpr (𝜏-Σ-path B) (ks tt))
+                     (es-path-id↑ B C kss)
+
+  opaque
+    unfolding Xinner-id↑ lhs-id↑
+    -- Recipe (a): subst-filler reversal from lhs-id↑ to Xinner-id↑.
+    outer-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                (ks : (a : El 𝜏) → SymExpr (B a))
+                (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+              → PathP (λ i → SymExpr (𝜏-Σ-path (λ a → ⅀ (B a) (C a)) i))
+                      (Xinner-id↑ B C ks kss) (lhs-id↑ B C ks kss)
+    outer-id↑ B C ks kss =
+      subst-filler SymExpr (𝜏-Σ-path (λ a → ⅀ (B a) (C a)))
+                            (Xinner-id↑ B C ks kss)
+
+  -- The composed structural FinSet path used by the id↑-case PathP.
+  opaque
+    chosen-path-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                      (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                    → ⅀ 𝜏 (λ a → ⅀ (B a) (C a))
+                    ≡ ⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)
+    chosen-path-id↑ B C =
+        sym (𝜏-Σ-path (λ a → ⅀ (B a) (C a)))
+      ∙ (λ i → ⅀ (𝜏-Σ-path B i) (B-path-id↑ B C i))
+
+  opaque
+    unfolding chosen-path-id↑
+    my-PathP-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                   (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                   (ks : (a : El 𝜏) → SymExpr (B a))
+                   (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+                 → PathP (λ i → SymExpr (chosen-path-id↑ B C i))
+                         (lhs-id↑ B C ks kss) (rhs-id↑ B C ks kss)
+    my-PathP-id↑ B C ks kss =
+      compPathP' {B = SymExpr} (symP (outer-id↑ B C ks kss))
+                                (bridge-id↑ B C ks kss)
+
+------------------------------------------------------------------------
+-- Path-equality lemma for the id↑ case.  Structural composite
+-- `chosen-path-id↑ = sym (𝜏-Σ-path …) ∙ Σ-of-paths-leg`.  We show its
+-- cong-fst equals cong-fst of `Inj (⅀Assoc≃ 𝜏 B C)` by chaining
+-- `cong-∙ fst`, the leg-1 `cong-fst-Σ≡Prop` reduction, and the leg-2
+-- `Σ-cong-equiv-fst-ua` identification; merge with `uaInvEquiv` and
+-- `uaCompEquiv` and identify the composite equiv with `⅀Assoc≃ 𝜏 B C`
+-- via a pointwise `equivEq` on explicit compositions (no Glue).
+------------------------------------------------------------------------
+
+opaque
+  unfolding chosen-path-id↑ B-path-id↑ 𝜏-Σ-path un
+
+  sym-assoc-id↑-path : (B : El 𝜏 → FinSet ℓ-zero)
+                       (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                     → chosen-path-id↑ B C
+                     ≡ Inj {A = ⅀ 𝜏 (λ a → ⅀ (B a) (C a))}
+                            {B = ⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)}
+                            (⅀Assoc≃ 𝜏 B C)
+  sym-assoc-id↑-path B C =
+    Σ≡Prop-inj (λ _ → isPropIsFinSet) _ _ fst-eq
+    where
+      -- Inner Σ-idl-≃ (the one that appears in 𝜏-Σ-path B) and outer
+      -- Σ-idl-≃ (the one in 𝜏-Σ-path (λ a → ⅀ (B a) (C a))).
+      Σ-idl-inner : El (B tt) ≃ Σ (El 𝜏) (El ∘ B)
+      Σ-idl-inner = Σ-idl-≃ {A = El ∘ B}
+
+      Σ-idl-outer : Σ (El (B tt)) (El ∘ C tt)
+                  ≃ Σ (El 𝜏) (λ a → Σ (El (B a)) (El ∘ C a))
+      Σ-idl-outer = Σ-idl-≃ {A = λ a → Σ (El (B a)) (El ∘ C a)}
+
+      -- Explicit composite equivalence whose action matches ⅀Assoc≃ 𝜏 B C
+      -- pointwise.  The equality holds by `refl` per element because the
+      -- chain is all `idEquiv`/`compEquiv`/`Σ-cong-equiv-fst`/`Σ-idl-≃`
+      -- whose βη-rules reduce on the pair pattern.
+      composite : Σ (El 𝜏) (λ a → Σ (El (B a)) (El ∘ C a))
+                ≃ Σ (Σ (El 𝜏) (El ∘ B)) (El ∘ ⅀Assoc-C' 𝜏 B C)
+      composite = compEquiv (invEquiv Σ-idl-outer)
+                            (Σ-cong-equiv-fst {B = El ∘ ⅀Assoc-C' 𝜏 B C} Σ-idl-inner)
+
+      -- The composite's underlying function reduces to `(tt, b, c) ↦ ((tt, b), c)`
+      -- definitionally.  ⅀Assoc≃'s function should reduce the same way, but goes
+      -- through `invEquiv (Σ-cong-equiv-fst ⟦⅀⟧FS)` whose `equivCtr` produces
+      -- a `transp` over a constant family that Agda doesn't auto-collapse.  We
+      -- bridge by giving the second-component path as `sym (transportRefl c)`.
+      composite≡⅀Assoc : composite ≡ ⅀Assoc≃ 𝜏 B C
+      composite≡⅀Assoc = equivEq (funExt path)
+        where
+          path : (x : Σ (El 𝜏) (λ a → Σ (El (B a)) (El ∘ C a)))
+               → composite .fst x ≡ ⅀Assoc≃ 𝜏 B C .fst x
+          path (tt , b , c) =
+            ΣPathP (refl , sym (transportRefl c))
+
+      fst-eq : cong fst (chosen-path-id↑ B C)
+             ≡ cong fst (Inj {A = ⅀ 𝜏 (λ a → ⅀ (B a) (C a))}
+                              {B = ⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)}
+                              (⅀Assoc≃ 𝜏 B C))
+      fst-eq =
+          cong-∙ fst (sym (𝜏-Σ-path (λ a → ⅀ (B a) (C a))))
+                      (λ i → ⅀ (𝜏-Σ-path B i) (B-path-id↑ B C i))
+        ∙ cong₂ _∙_
+            (cong sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                         {u = ⅀ (B tt) (C tt)}
+                         {v = ⅀ 𝜏 (λ a → ⅀ (B a) (C a))}
+                         (ua Σ-idl-outer)))
+            (Σ-cong-equiv-fst-ua Σ-idl-inner (El ∘ ⅀Assoc-C' 𝜏 B C))
+        ∙ cong (_∙ ua (Σ-cong-equiv-fst {B = El ∘ ⅀Assoc-C' 𝜏 B C} Σ-idl-inner))
+               (sym (uaInvEquiv Σ-idl-outer))
+        ∙ sym (uaCompEquiv (invEquiv Σ-idl-outer)
+                           (Σ-cong-equiv-fst {B = El ∘ ⅀Assoc-C' 𝜏 B C} Σ-idl-inner))
+        ∙ cong ua composite≡⅀Assoc
+        ∙ sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                  {u = ⅀ 𝜏 (λ a → ⅀ (B a) (C a))}
+                  {v = ⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)}
+                  (ua (⅀Assoc≃ 𝜏 B C)))
+
+------------------------------------------------------------------------
+-- sym-assoc-id↑: subst `my-PathP-id↑` along `sym-assoc-id↑-path` to
+-- retype against the abstract `Inj (⅀Assoc≃ 𝜏 B C)`-index path.
+------------------------------------------------------------------------
+opaque
+  unfolding lhs-id↑ rhs-id↑
+  sym-assoc-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
+                  (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
+                  (ks : (a : El 𝜏) → SymExpr (B a))
+                  (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
+                → PathP (λ i → SymExpr (Inj {A = ⅀ 𝜏 (λ a → ⅀ (B a) (C a))}
+                                              {B = ⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)}
+                                              (⅀Assoc≃ 𝜏 B C) i))
+                        (sym-comp 𝜏 (λ a → ⅀ (B a) (C a)) id↑
+                                  (λ a → sym-comp (B a) (C a) (ks a) (kss a)))
+                        (sym-comp (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C)
+                                  (sym-comp 𝜏 B id↑ ks)
+                                  (λ ab → kss _ _))
+  sym-assoc-id↑ B C ks kss =
+    subst (λ p → PathP (λ i → SymExpr (p i))
+                       (lhs-id↑ B C ks kss) (rhs-id↑ B C ks kss))
+          (sym-assoc-id↑-path B C)
+          (my-PathP-id↑ B C ks kss)
+
+------------------------------------------------------------------------
+-- §C  Associativity, add↑ case.
+--
+-- Mirrors IExpr §10 (step A→B→C→D) but with two FinSet simplifications:
+-- (1) `El (A₁ ⊎̂ A₂) = El A₁ ⊎ El A₂` lets joint-C' / joint-kss pattern
+-- match on `inl`/`inr` directly (no `_≤?_`).
+-- (2) `⟦⅀⟧FS = idEquiv` collapses Σ-pair forwarding to the identity, so
+-- `joint-C' ∘ inl/inr` matches `⅀Assoc-C' Aᵢ ...` definitionally — the
+-- joint-form bridge collapses to a single subst-filler.
+------------------------------------------------------------------------
+
+private
+  -- Joint family — kept TRANSPARENT (no opaque wrap).  Uniform body via
+  -- `distr-iso .fun` (which itself is uniform-Σ); reduces on `inl ab` /
+  -- `inr ab` to `C (inl (fst ab)) (snd ab)` / `C (inr (fst ab)) (snd ab)`,
+  -- matching `⅀Assoc-C' Aᵢ (B ∘ inl/inr) (C ∘ inl/inr) ab` after the
+  -- `⟦⅀⟧FS = idEquiv` reduction.  (Opaque-wrapping joint-C' was found
+  -- to block step-C-add↑'s boundary unification.)
+  joint-C' : (A₁ A₂ : FinSet ℓ-zero)
+             (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+             (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+           → El (⅀ A₁ (B ∘ inl) ⊎̂ ⅀ A₂ (B ∘ inr)) → FinSet ℓ-zero
+  joint-C' A₁ A₂ B C ab =
+    C (fst (Iso.fun (distr-iso A₁ A₂ B) ab))
+      (snd (Iso.fun (distr-iso A₁ A₂ B) ab))
+
+  joint-kss : (A₁ A₂ : FinSet ℓ-zero)
+              (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+              (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+              (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+            → (ab : El (⅀ A₁ (B ∘ inl) ⊎̂ ⅀ A₂ (B ∘ inr)))
+            → SymExpr (joint-C' A₁ A₂ B C ab)
+  joint-kss A₁ A₂ B C kss ab =
+    kss (fst (Iso.fun (distr-iso A₁ A₂ B) ab))
+        (snd (Iso.fun (distr-iso A₁ A₂ B) ab))
+
+  opaque
+    unfolding ⊎̂-distr-path un
+    -- B-path-add↑ via `ua-unglue` of the distr equivalence.  Body is
+    -- `C (fst (ua-unglue distr i x)) (snd (ua-unglue distr i x))`.  At i=0
+    -- this is `C (fst (Iso.fun distr-iso x)) (snd ...)` matching `joint-C'`.
+    -- At i=1 it is `C (fst x) (snd x)` matching `⅀Assoc-C' (A₁ ⊎̂ A₂) B C`
+    -- (after the `⟦⅀⟧FS = idEquiv` reduction).
+    B-path-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                  (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                  (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                → PathP (λ i → El (⊎̂-distr-path A₁ A₂ B i) → FinSet ℓ-zero)
+                        (joint-C' A₁ A₂ B C)
+                        (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)
+    B-path-add↑ A₁ A₂ B C i x =
+      C (fst (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
+        (snd (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
+
+  opaque
+    unfolding ⊎̂-distr-path un B-path-add↑
+    es-path-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                   (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                   (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                   (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                 → PathP (λ i → (a : El (⊎̂-distr-path A₁ A₂ B i))
+                                → SymExpr (B-path-add↑ A₁ A₂ B C i a))
+                         (joint-kss A₁ A₂ B C kss)
+                         (λ ab → kss (fst ab) (snd ab))
+    es-path-add↑ A₁ A₂ B C kss i x =
+      kss (fst (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
+          (snd (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
+
+  -- IH-endpoint definitions.  Opaque so the surrounding bridges don't
+  -- re-expand the inner `sym-comp ∘ sym-comp` chains at every consumer.
+  opaque
+    Xinner-L-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                    (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                    (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                    (e₁ : SymExpr A₁)
+                    (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                    (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                  → SymExpr (⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a))))
+    Xinner-L-add↑ A₁ A₂ B C e₁ ks kss =
+      sym-comp A₁ (λ a → ⅀ (B (inl a)) (C (inl a))) e₁
+               (λ a → sym-comp (B (inl a)) (C (inl a)) (ks (inl a)) (kss (inl a)))
+
+    Xinner-R-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                    (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                    (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                    (e₂ : SymExpr A₂)
+                    (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                    (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                  → SymExpr (⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a))))
+    Xinner-R-add↑ A₁ A₂ B C e₂ ks kss =
+      sym-comp A₂ (λ a → ⅀ (B (inr a)) (C (inr a))) e₂
+               (λ a → sym-comp (B (inr a)) (C (inr a)) (ks (inr a)) (kss (inr a)))
+
+  opaque
+    recL-IHend-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                      (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                      (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                      (e₁ : SymExpr A₁)
+                      (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                      (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                    → SymExpr (⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl)))
+    recL-IHend-add↑ A₁ A₂ B C e₁ ks kss =
+      sym-comp (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))
+               (sym-comp A₁ (B ∘ inl) e₁ (ks ∘ inl))
+               (λ ab → kss (inl (fst ab)) (snd ab))
+
+    recR-IHend-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                      (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                      (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                      (e₂ : SymExpr A₂)
+                      (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                      (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                    → SymExpr (⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr)))
+    recR-IHend-add↑ A₁ A₂ B C e₂ ks kss =
+      sym-comp (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))
+               (sym-comp A₂ (B ∘ inr) e₂ (ks ∘ inr))
+               (λ ab → kss (inr (fst ab)) (snd ab))
+
+  -- The three principal endpoints.
+  opaque
+    lhs-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+               (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+               (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+               (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+               (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+               (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+             → SymExpr (⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a)))
+    lhs-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      sym-comp (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a)) (add↑ e₁ e₂)
+               (λ a → sym-comp (B a) (C a) (ks a) (kss a))
+
+    rhs-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+               (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+               (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+               (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+               (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+               (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+             → SymExpr (⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C))
+    rhs-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      sym-comp (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)
+               (sym-comp (A₁ ⊎̂ A₂) B (add↑ e₁ e₂) ks)
+               (λ ab → kss (fst ab) (snd ab))
+
+    joint-form-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                      (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                      (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                      (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                      (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                      (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                    → SymExpr (⅀ (⅀ A₁ (B ∘ inl) ⊎̂ ⅀ A₂ (B ∘ inr))
+                                  (joint-C' A₁ A₂ B C))
+    joint-form-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      sym-comp (⅀ A₁ (B ∘ inl) ⊎̂ ⅀ A₂ (B ∘ inr))
+               (joint-C' A₁ A₂ B C)
+               (add↑ (sym-comp A₁ (B ∘ inl) e₁ (ks ∘ inl))
+                     (sym-comp A₂ (B ∘ inr) e₂ (ks ∘ inr)))
+               (joint-kss A₁ A₂ B C kss)
+
+  -- **Step A** — recipe (a) subst-filler reversal at the outer
+  -- `⊎̂-distr-path A₁ A₂ (λ a → ⅀ (B a) (C a))`.
+  opaque
+    unfolding lhs-add↑ Xinner-L-add↑ Xinner-R-add↑
+    step-A-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                  (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                  (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                  (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                  (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                  (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                → PathP (λ i → SymExpr (sym (⊎̂-distr-path A₁ A₂
+                                                (λ a → ⅀ (B a) (C a))) i))
+                        (lhs-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+                        (add↑ (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                              (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss))
+    step-A-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      symP (subst-filler SymExpr (⊎̂-distr-path A₁ A₂ (λ a → ⅀ (B a) (C a)))
+                                  (add↑ (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                                        (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss)))
+
+  -- **Step B** — apply the per-fibre IHs underneath `add↑`.  The IHs are
+  -- handed in by the top-level dispatch as recursive `sym-assoc` calls.
+  opaque
+    unfolding Xinner-L-add↑ Xinner-R-add↑ recL-IHend-add↑ recR-IHend-add↑
+    step-B-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                  (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                  (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                  (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                  (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                  (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                  (IH-L : PathP (λ i → SymExpr
+                                          (Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a))
+                                                                    (C (inl a)))}
+                                                {B = ⅀ (⅀ A₁ (B ∘ inl))
+                                                       (⅀Assoc-C' A₁ (B ∘ inl)
+                                                                      (C ∘ inl))}
+                                                (⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)) i))
+                                (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                                (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss))
+                  (IH-R : PathP (λ i → SymExpr
+                                          (Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a))
+                                                                    (C (inr a)))}
+                                                {B = ⅀ (⅀ A₂ (B ∘ inr))
+                                                       (⅀Assoc-C' A₂ (B ∘ inr)
+                                                                      (C ∘ inr))}
+                                                (⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)) i))
+                                (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss)
+                                (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+                → PathP (λ i → SymExpr ( Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a))
+                                                                  (C (inl a)))}
+                                              {B = ⅀ (⅀ A₁ (B ∘ inl))
+                                                     (⅀Assoc-C' A₁ (B ∘ inl)
+                                                                    (C ∘ inl))}
+                                              (⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)) i
+                                       ⊎̂ Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a))
+                                                                  (C (inr a)))}
+                                              {B = ⅀ (⅀ A₂ (B ∘ inr))
+                                                     (⅀Assoc-C' A₂ (B ∘ inr)
+                                                                    (C ∘ inr))}
+                                              (⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)) i))
+                        (add↑ (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                              (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss))
+                        (add↑ (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss)
+                              (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+    step-B-add↑ _ _ _ _ _ _ _ _ IH-L IH-R i = add↑ (IH-L i) (IH-R i)
+
+  -- **Step C** — subst-filler over `⊎̂-distr-path (⅀ A₁ (B ∘ inl))
+  -- (⅀ A₂ (B ∘ inr)) (joint-C' A₁ A₂ B C)`.  After the FinSet
+  -- simplifications, the family `⅀Assoc-C' Aᵢ (B ∘ inl/inr) (C ∘ inl/inr)`
+  -- IS definitionally `joint-C' A₁ A₂ B C ∘ inl/inr`, so the subst-filler
+  -- terminates at `joint-form-add↑` directly (no joint-C'-on-inj bridges).
+  opaque
+    unfolding recL-IHend-add↑ recR-IHend-add↑ joint-form-add↑
+              ⊎̂-distr-path un
+    step-C-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                  (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                  (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                  (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                  (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                  (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                → PathP (λ i → SymExpr (⊎̂-distr-path (⅀ A₁ (B ∘ inl))
+                                                       (⅀ A₂ (B ∘ inr))
+                                                       (joint-C' A₁ A₂ B C) i))
+                        (add↑ (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss)
+                              (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+                        (joint-form-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+    step-C-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      subst-filler SymExpr (⊎̂-distr-path (⅀ A₁ (B ∘ inl))
+                                          (⅀ A₂ (B ∘ inr))
+                                          (joint-C' A₁ A₂ B C))
+                            (add↑ (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss)
+                                  (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+
+  -- **Step D** — `sym-comp-PathP` over the outer `⊎̂-distr-path A₁ A₂ B`
+  -- with the Σ-of-paths family `B-path-add↑`.
+  opaque
+    unfolding joint-form-add↑ rhs-add↑ sym-comp-PathP
+    step-D-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                  (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                  (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                  (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                  (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                  (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                → PathP (λ i → SymExpr (⅀ (⊎̂-distr-path A₁ A₂ B i)
+                                            (B-path-add↑ A₁ A₂ B C i)))
+                        (joint-form-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+                        (rhs-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+    step-D-add↑ A₁ A₂ B C e₁ e₂ ks kss =
+      sym-comp-PathP (⊎̂-distr-path A₁ A₂ B) (B-path-add↑ A₁ A₂ B C)
+                     (subst-filler SymExpr (⊎̂-distr-path A₁ A₂ B)
+                                            (add↑ (sym-comp A₁ (B ∘ inl) e₁ (ks ∘ inl))
+                                                  (sym-comp A₂ (B ∘ inr) e₂ (ks ∘ inr))))
+                     (es-path-add↑ A₁ A₂ B C kss)
+
+  -- chosen-path-add↑ : the composed structural FinSet path, sealed
+  -- independently so consumers reference it by name.
+  opaque
+    chosen-path-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                       (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                       (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                     → ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))
+                     ≡ ⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)
+    chosen-path-add↑ A₁ A₂ B C =
+        sym (⊎̂-distr-path A₁ A₂ (λ a → ⅀ (B a) (C a)))
+      ∙ (λ i → Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a)))}
+                    {B = ⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))}
+                    (⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)) i
+             ⊎̂ Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a)))}
+                    {B = ⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))}
+                    (⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)) i)
+      ∙ ⊎̂-distr-path (⅀ A₁ (B ∘ inl)) (⅀ A₂ (B ∘ inr)) (joint-C' A₁ A₂ B C)
+      ∙ (λ i → ⅀ (⊎̂-distr-path A₁ A₂ B i) (B-path-add↑ A₁ A₂ B C i))
+
+  -- composite-add↑ : the four-leg compPathP' chain.
+  opaque
+    unfolding chosen-path-add↑
+    composite-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                     (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                     (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                     (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                     (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                     (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                     (IH-L : PathP (λ i → SymExpr
+                                            (Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a))
+                                                                      (C (inl a)))}
+                                                  {B = ⅀ (⅀ A₁ (B ∘ inl))
+                                                         (⅀Assoc-C' A₁ (B ∘ inl)
+                                                                        (C ∘ inl))}
+                                                  (⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)) i))
+                                    (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                                    (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss))
+                     (IH-R : PathP (λ i → SymExpr
+                                            (Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a))
+                                                                      (C (inr a)))}
+                                                  {B = ⅀ (⅀ A₂ (B ∘ inr))
+                                                         (⅀Assoc-C' A₂ (B ∘ inr)
+                                                                        (C ∘ inr))}
+                                                  (⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)) i))
+                                    (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss)
+                                    (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+                   → PathP (λ i → SymExpr (chosen-path-add↑ A₁ A₂ B C i))
+                           (lhs-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+                           (rhs-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+    composite-add↑ A₁ A₂ B C e₁ e₂ ks kss IH-L IH-R =
+      compPathP' {B = SymExpr} (step-A-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+        (compPathP' {B = SymExpr} (step-B-add↑ A₁ A₂ B C e₁ e₂ ks kss IH-L IH-R)
+          (compPathP' {B = SymExpr} (step-C-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+                                     (step-D-add↑ A₁ A₂ B C e₁ e₂ ks kss)))
+
+------------------------------------------------------------------------
+-- Path-equality lemma for the add↑ case.  Identifies the four-leg
+-- structural composite with `Inj (⅀Assoc≃ (A₁ ⊎̂ A₂) B C)`.  Uses the
+-- `sym-idr-add↑-path` template: `Σ≡Prop-inj` + `cong-∙ fst` + per-leg
+-- simplifications (`cong-fst-Σ≡Prop`, `ua-⊎`, `Σ-cong-equiv-fst-ua`) +
+-- merge via `uaInvEquiv`/`uaCompEquiv` + identify composite with
+-- `⅀Assoc≃` via `equivEq (funExt _)` on `inl`/`inr` cases.
+------------------------------------------------------------------------
+opaque
+  unfolding chosen-path-add↑ B-path-add↑ ⊎̂-distr-path un
+
+  sym-assoc-add↑-path : (A₁ A₂ : FinSet ℓ-zero)
+                        (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                        (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                      → chosen-path-add↑ A₁ A₂ B C
+                      ≡ Inj {A = ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))}
+                             {B = ⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)}
+                             (⅀Assoc≃ (A₁ ⊎̂ A₂) B C)
+  sym-assoc-add↑-path A₁ A₂ B C =
+    Σ≡Prop-inj (λ _ → isPropIsFinSet) _ _ fst-eq
+    where
+      -- The three distr-iso instances we use.
+      distr-outer : (Σ (El A₁) (λ a → El (⅀ (B (inl a)) (C (inl a)))))
+                  ⊎ (Σ (El A₂) (λ a → El (⅀ (B (inr a)) (C (inr a)))))
+                  ≃ Σ (El A₁ ⊎ El A₂) (λ x → El (⅀ (B x) (C x)))
+      distr-outer = isoToEquiv (distr-iso A₁ A₂ (λ a → ⅀ (B a) (C a)))
+
+      distr-inner : (Σ (El (⅀ A₁ (B ∘ inl)))
+                         (El ∘ ⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl)))
+                  ⊎ (Σ (El (⅀ A₂ (B ∘ inr)))
+                         (El ∘ ⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr)))
+                  ≃ Σ (El (⅀ A₁ (B ∘ inl)) ⊎ El (⅀ A₂ (B ∘ inr)))
+                      (El ∘ joint-C' A₁ A₂ B C)
+      distr-inner = isoToEquiv (distr-iso (⅀ A₁ (B ∘ inl)) (⅀ A₂ (B ∘ inr))
+                                          (joint-C' A₁ A₂ B C))
+
+      distr-B : (Σ (El A₁) (El ∘ B ∘ inl)) ⊎ (Σ (El A₂) (El ∘ B ∘ inr))
+              ≃ Σ (El A₁ ⊎ El A₂) (El ∘ B)
+      distr-B = isoToEquiv (distr-iso A₁ A₂ B)
+
+      Assoc≃-inl : El (⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a))))
+                 ≃ El (⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl)))
+      Assoc≃-inl = ⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)
+
+      Assoc≃-inr : El (⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a))))
+                 ≃ El (⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr)))
+      Assoc≃-inr = ⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)
+
+      -- Explicit composite equivalence whose action matches ⅀Assoc≃ pointwise
+      -- on `inl`/`inr` cases.
+      composite : El (⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a)))
+                ≃ El (⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C))
+      composite =
+        compEquiv (invEquiv distr-outer)
+        (compEquiv (⊎-equiv Assoc≃-inl Assoc≃-inr)
+        (compEquiv distr-inner
+                   (Σ-cong-equiv-fst {B = El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C} distr-B)))
+
+      composite≡⅀Assoc : composite ≡ ⅀Assoc≃ (A₁ ⊎̂ A₂) B C
+      composite≡⅀Assoc = equivEq (funExt path)
+        where
+          path : (x : El (⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))))
+               → composite .fst x ≡ ⅀Assoc≃ (A₁ ⊎̂ A₂) B C .fst x
+          path (inl a , b , c) = refl
+          path (inr a , b , c) = refl
+
+      -- Named per-leg paths to keep the chain readable.
+      Inj-Assoc₁ : ⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a)))
+                 ≡ ⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))
+      Inj-Assoc₁ = Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a)))}
+                       {B = ⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))}
+                       Assoc≃-inl
+
+      Inj-Assoc₂ : ⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a)))
+                 ≡ ⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))
+      Inj-Assoc₂ = Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a)))}
+                       {B = ⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))}
+                       Assoc≃-inr
+
+      fst-eq : cong fst (chosen-path-add↑ A₁ A₂ B C)
+             ≡ cong fst (Inj {A = ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))}
+                              {B = ⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)}
+                              (⅀Assoc≃ (A₁ ⊎̂ A₂) B C))
+      fst-eq =
+          -- Step 1: distribute cong fst over the 4-leg composite.
+          cong-∙ fst (sym (⊎̂-distr-path A₁ A₂ (λ a → ⅀ (B a) (C a))))
+                      ((λ i → Inj-Assoc₁ i ⊎̂ Inj-Assoc₂ i)
+                     ∙ ⊎̂-distr-path (⅀ A₁ (B ∘ inl)) (⅀ A₂ (B ∘ inr))
+                                     (joint-C' A₁ A₂ B C)
+                     ∙ (λ i → ⅀ (⊎̂-distr-path A₁ A₂ B i) (B-path-add↑ A₁ A₂ B C i)))
+        ∙ cong₂ _∙_
+            (cong sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                         {u = ⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a)))
+                             ⊎̂ ⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a)))}
+                         {v = ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))}
+                         (ua distr-outer)))
+            (cong-∙ fst (λ i → Inj-Assoc₁ i ⊎̂ Inj-Assoc₂ i)
+                         (⊎̂-distr-path (⅀ A₁ (B ∘ inl)) (⅀ A₂ (B ∘ inr))
+                                        (joint-C' A₁ A₂ B C)
+                       ∙ (λ i → ⅀ (⊎̂-distr-path A₁ A₂ B i)
+                                  (B-path-add↑ A₁ A₂ B C i))))
+        -- Now `cong fst chosen ≡ sym (ua distr-outer) ∙ (leg2 ∙ (leg3 ∙ leg4))`.
+        -- Reduce leg2 = `cong fst (cong₂ _⊎̂_ Inj-Assoc₁ Inj-Assoc₂)`.
+        ∙ cong (sym (ua distr-outer) ∙_)
+            (cong₂ _∙_
+              (λ i → cong₂ _⊎_ (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                                  {u = ⅀ A₁ (λ a → ⅀ (B (inl a)) (C (inl a)))}
+                                  {v = ⅀ (⅀ A₁ (B ∘ inl))
+                                          (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))}
+                                  (ua Assoc≃-inl) i)
+                                (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                                  {u = ⅀ A₂ (λ a → ⅀ (B (inr a)) (C (inr a)))}
+                                  {v = ⅀ (⅀ A₂ (B ∘ inr))
+                                          (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))}
+                                  (ua Assoc≃-inr) i))
+              (cong-∙ fst (⊎̂-distr-path (⅀ A₁ (B ∘ inl)) (⅀ A₂ (B ∘ inr))
+                                          (joint-C' A₁ A₂ B C))
+                            (λ i → ⅀ (⊎̂-distr-path A₁ A₂ B i)
+                                     (B-path-add↑ A₁ A₂ B C i))))
+        -- Apply ua-⊎ to leg2, simplify leg3 and leg4.
+        ∙ cong (sym (ua distr-outer) ∙_)
+            (cong₂ _∙_
+              (ua-⊎ Assoc≃-inl Assoc≃-inr)
+              (cong₂ _∙_
+                (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                  {u = ⅀ (⅀ A₁ (B ∘ inl)) (⅀Assoc-C' A₁ (B ∘ inl) (C ∘ inl))
+                      ⊎̂ ⅀ (⅀ A₂ (B ∘ inr)) (⅀Assoc-C' A₂ (B ∘ inr) (C ∘ inr))}
+                  {v = ⅀ (⅀ A₁ (B ∘ inl) ⊎̂ ⅀ A₂ (B ∘ inr)) (joint-C' A₁ A₂ B C)}
+                  (ua distr-inner))
+                (Σ-cong-equiv-fst-ua distr-B (El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C))))
+        -- Merge `sym (ua distr-outer)` to `ua (invEquiv distr-outer)`.
+        ∙ cong (_∙ ua (⊎-equiv Assoc≃-inl Assoc≃-inr)
+                ∙ ua distr-inner
+                ∙ ua (Σ-cong-equiv-fst {B = El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C} distr-B))
+               (sym (uaInvEquiv distr-outer))
+        -- Merge all 4 `ua` legs into one via `uaCompEquiv`.
+        ∙ sym ( uaCompEquiv (invEquiv distr-outer)
+                  (compEquiv (⊎-equiv Assoc≃-inl Assoc≃-inr)
+                             (compEquiv distr-inner
+                                        (Σ-cong-equiv-fst
+                                          {B = El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C}
+                                          distr-B)))
+              ∙ cong (ua (invEquiv distr-outer) ∙_)
+                  (  uaCompEquiv (⊎-equiv Assoc≃-inl Assoc≃-inr)
+                       (compEquiv distr-inner
+                                  (Σ-cong-equiv-fst
+                                    {B = El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C}
+                                    distr-B))
+                   ∙ cong (ua (⊎-equiv Assoc≃-inl Assoc≃-inr) ∙_)
+                       (uaCompEquiv distr-inner
+                          (Σ-cong-equiv-fst
+                            {B = El ∘ ⅀Assoc-C' (A₁ ⊎̂ A₂) B C}
+                            distr-B))))
+        -- Now `cong fst chosen ≡ ua composite`.  Identify composite with ⅀Assoc≃.
+        ∙ cong ua composite≡⅀Assoc
+        -- Land at `cong fst (Inj (⅀Assoc≃ ...))`.
+        ∙ sym (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
+                  {u = ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))}
+                  {v = ⅀ (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)}
+                  (ua (⅀Assoc≃ (A₁ ⊎̂ A₂) B C)))
+
+------------------------------------------------------------------------
+-- sym-assoc-add↑: subst `composite-add↑` along `sym-assoc-add↑-path` to
+-- retype against the abstract `Inj (⅀Assoc≃ (A₁ ⊎̂ A₂) B C)` index path.
+-- Takes per-fibre IHs IH-L, IH-R from the top-level dispatch.
+------------------------------------------------------------------------
+opaque
+  unfolding lhs-add↑ rhs-add↑
+  sym-assoc-add↑ : (A₁ A₂ : FinSet ℓ-zero)
+                   (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
+                   (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
+                   (e₁ : SymExpr A₁) (e₂ : SymExpr A₂)
+                   (ks : (a : El (A₁ ⊎̂ A₂)) → SymExpr (B a))
+                   (kss : (a : El (A₁ ⊎̂ A₂)) (b : El (B a)) → SymExpr (C a b))
+                   (IH-L : PathP (λ i → SymExpr
+                                          (Inj {A = ⅀ A₁ (λ a → ⅀ (B (inl a))
+                                                                    (C (inl a)))}
+                                                {B = ⅀ (⅀ A₁ (B ∘ inl))
+                                                       (⅀Assoc-C' A₁ (B ∘ inl)
+                                                                      (C ∘ inl))}
+                                                (⅀Assoc≃ A₁ (B ∘ inl) (C ∘ inl)) i))
+                                  (Xinner-L-add↑ A₁ A₂ B C e₁ ks kss)
+                                  (recL-IHend-add↑ A₁ A₂ B C e₁ ks kss))
+                   (IH-R : PathP (λ i → SymExpr
+                                          (Inj {A = ⅀ A₂ (λ a → ⅀ (B (inr a))
+                                                                    (C (inr a)))}
+                                                {B = ⅀ (⅀ A₂ (B ∘ inr))
+                                                       (⅀Assoc-C' A₂ (B ∘ inr)
+                                                                      (C ∘ inr))}
+                                                (⅀Assoc≃ A₂ (B ∘ inr) (C ∘ inr)) i))
+                                  (Xinner-R-add↑ A₁ A₂ B C e₂ ks kss)
+                                  (recR-IHend-add↑ A₁ A₂ B C e₂ ks kss))
+                 → PathP (λ i → SymExpr
+                                  (Inj {A = ⅀ (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a))}
+                                        {B = ⅀ (⅀ (A₁ ⊎̂ A₂) B)
+                                               (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)}
+                                        (⅀Assoc≃ (A₁ ⊎̂ A₂) B C) i))
+                         (sym-comp (A₁ ⊎̂ A₂) (λ a → ⅀ (B a) (C a)) (add↑ e₁ e₂)
+                                   (λ a → sym-comp (B a) (C a) (ks a) (kss a)))
+                         (sym-comp (⅀ (A₁ ⊎̂ A₂) B) (⅀Assoc-C' (A₁ ⊎̂ A₂) B C)
+                                   (sym-comp (A₁ ⊎̂ A₂) B (add↑ e₁ e₂) ks)
+                                   (λ ab → kss _ _))
+  sym-assoc-add↑ A₁ A₂ B C e₁ e₂ ks kss IH-L IH-R =
+    subst (λ p → PathP (λ i → SymExpr (p i))
+                       (lhs-add↑ A₁ A₂ B C e₁ e₂ ks kss)
+                       (rhs-add↑ A₁ A₂ B C e₁ e₂ ks kss))
+          (sym-assoc-add↑-path A₁ A₂ B C)
+          (composite-add↑ A₁ A₂ B C e₁ e₂ ks kss IH-L IH-R)
+
+------------------------------------------------------------------------
+-- Top-level `sym-assoc`: induction on the SymExpr argument, dispatching
+-- to the per-case proofs (sym-assoc-id↑ / sym-assoc-val↑ / sym-assoc-add↑).
+-- The add↑ case feeds itself recursive IHs for the per-fibre half-sides,
+-- via `B ∘ inl` and `B ∘ inr` restrictions (mirroring IExpr-assoc's
+-- top-level dispatch at IExpr.agda:1553-1558).
+--
+-- Uses bare-variable patterns (not dot-patterns like `.𝜏`/`.∅̂`/`.(_⊎̂_)`)
+-- because under opaque `isFinSetΣ-op` the parser interprets `.𝜏` as a
+-- copattern projection (the `𝜏` field of UniverseHelpers).  Same workaround
+-- as `sym-idr` at lines 459-515.
+------------------------------------------------------------------------
+opaque
+  unfolding Xinner-L-add↑ Xinner-R-add↑ recL-IHend-add↑ recR-IHend-add↑
   sym-assoc : (A : FinSet ℓ-zero) (B : El A → FinSet ℓ-zero)
               (C : (a : El A) → El (B a) → FinSet ℓ-zero)
               (k : SymExpr A) (ks : (a : El A) → SymExpr (B a))
@@ -655,6 +1428,12 @@ postulate
                     (sym-comp (⅀ A B) (⅀Assoc-C' A B C)
                               (sym-comp A B k ks)
                               (λ ab → kss _ _))
+  sym-assoc _ B C id↑ ks kss = sym-assoc-id↑ B C ks kss
+  sym-assoc _ B C (val↑ n) ks kss = sym-assoc-val↑ n B C ks kss
+  sym-assoc _ B C (add↑ {A₁} {A₂} e₁ e₂) ks kss =
+    sym-assoc-add↑ A₁ A₂ B C e₁ e₂ ks kss
+      (sym-assoc A₁ (B ∘ inl) (C ∘ inl) e₁ (ks ∘ inl) (λ a → kss (inl a)))
+      (sym-assoc A₂ (B ∘ inr) (C ∘ inr) e₂ (ks ∘ inr) (λ a → kss (inr a)))
 
 SymExprOperad : SymmOperad SymExpr
 Operad.isSetK SymExprOperad = isSetSymExpr

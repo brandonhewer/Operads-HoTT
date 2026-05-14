@@ -7,8 +7,7 @@ open import Cubical.Foundations.Prelude
 open import Cubical.Data.Nat using (ℕ)
 
 open import HoTTOperads.Universe.Instances.Nat using (𝓝)
-open import HoTTOperads.Free.IR using (FreeOpsIR ; leaf ; node ; CodeOp)
-open import HoTTOperads.Free.Operad using (FreeOps')
+open import HoTTOperads.Free.IR using (FreeOpsIR ; leaf ; node ; CodeOp ; FreeOps')
 
 private
   variable

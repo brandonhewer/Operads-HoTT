@@ -37,8 +37,8 @@ open import HoTTOperads.Examples.Associative
 open import HoTTOperads.Examples.Commutative
 
 open import HoTTOperads.Free.HIT
+open import HoTTOperads.Free.IR.Base
+open import HoTTOperads.Free.IR.FiberEquiv
 open import HoTTOperads.Free.IR
-open import HoTTOperads.Free.IR.Sethood
-open import HoTTOperads.Free.Operad
 open import HoTTOperads.Free.Universal
 open import HoTTOperads.Free.Examples
