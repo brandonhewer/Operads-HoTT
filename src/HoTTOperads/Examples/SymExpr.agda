@@ -642,21 +642,6 @@ private
       cong (λ p → C (fst p) (snd p))
            (sym (transp-El-𝜏-Σ-path B a₀) ∙ fromPathP a-path)
 
-  opaque
-    unfolding B-path-id↑
-    -- The kss-application twin of B-path-id↑.  Bridges `kss tt` (the
-    -- inner kss-application at a = tt) and the RHS `λ ab → kss _ _`.
-    es-path-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
-                  (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
-                  (kss : (a : El 𝜏) (b : El (B a)) → SymExpr (C a b))
-                → PathP (λ i → (a : El (𝜏-Σ-path B i))
-                              → SymExpr (B-path-id↑ B C i a))
-                        (kss tt)
-                        (λ ab → kss (fst ab) (snd ab))
-    es-path-id↑ B C kss = funExtDep λ {a₀} {a₁} a-path →
-      cong (λ p → kss (fst p) (snd p))
-           (sym (transp-El-𝜏-Σ-path B a₀) ∙ fromPathP a-path)
-
 postulate
   sym-assoc : (A : FinSet ℓ-zero) (B : El A → FinSet ℓ-zero)
               (C : (a : El A) → El (B a) → FinSet ℓ-zero)
