@@ -27,7 +27,7 @@
 --   §6  Left identity `graft-idl`.
 --   §7  Right identity `graft-idr` (cases: leaf | node | set).
 --   §8  Associativity `graft-assoc` (cases: leaf | node | set).
---   §9  Operad assembly: `isSetFreeOps`, `FreeOperad`.
+--   §9  Operad assembly: `FreeOperad`.
 --
 -- ## The five-step Recipe used in graft-assoc
 --
