@@ -55,22 +55,6 @@
 --       `Fin-fst-≡ refl` on each input; the bridge is always
 --       `cong B (Fin-fst-≡ refl)` lifted to a `funExt` over the family,
 --       optionally chased by a `subst`/`ΣPathP` on the bound proof.
---
--- ## Opacity conventions
---
---   1. `Fin1≃Unit` is kept transparent. Its `.equiv-proof` projection is
---      consumed downstream via `UniverseBase.⟦𝜏⟧`.
---   2. `NatInj` and `NatInjComp` are `opaque`: the bodies use `ua` and
---      `isSetℕ` respectively and never need to reduce.
---   3. Every `…-preserves-fst`, `⅀Assoc-C'-on-…`, `⅀Assoc-C'-add↑-…`,
---      `fubini`, and `⅀Assoc-preserves-fst{,-INV}` lemma is `opaque`.
---      §6 declares `unfolding ⅀Assoc-C'-on-inl ⅀Assoc-C'-on-inr` because
---      its inductive cases need the §5 lemmas to reduce.
---   4. Internal one-shot reduction helpers inside §6's let-blocks and
---      §7's `where`-clause are wrapped in inner `opaque` blocks (the
---      Phase B speedup; same pattern as IExpr.agda's `r-+-idx-bridge`).
---   5. The private `sumFinFwd-inl-{fst,snd}` helpers and the definitional
---      sanity-check module in §8 stay private.
 -- ============================================================================
 module HoTTOperads.Universe.Instances.Nat where
 
@@ -695,9 +679,7 @@ opaque
 
 -- The sanity-check module below pins the *exact* structural shape of
 -- `fst (invEq (⅀Assoc≃ A B C) k)` that `⅀Assoc-preserves-fst-INV`
--- relies on. The body is a single `refl`: cost is one typechecker
--- reduction, value is regression-detection if `⅀Assoc≃`'s composition
--- order ever changes.
+-- relies on.
 private
   module _ (A : ℕ) (B : Fin A → ℕ) (C : (a : Fin A) → Fin (B a) → ℕ)
            (k : Fin (sum (sum A B) (⅀Assoc-C' A B C))) where

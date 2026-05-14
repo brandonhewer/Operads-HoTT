@@ -45,15 +45,6 @@
 --       `c-restore` that recovers the canonical `snd` component.
 --   (e) `adj-coh` — adjunction coherence for an arbitrary equivalence,
 --       used inside (d) to relate `funExt⁻ C'-eq` transports back to `secEq`.
---
--- ## Opacity conventions (kept after `ff2c818 Speed up typechecking`)
---
--- Path-valued helpers are wrapped in `opaque` to seal cubical reductions.
--- NEVER wrap an `isoToEquiv`- or equivalence-valued definition in `opaque`
--- — its `.equiv-proof` projection is load-bearing for downstream computations
--- (`uaβ`, `equivFun`, `invEq`, …). NEVER wrap a definition whose body must
--- reduce inside a `subst (FreeOps K) …` argument (`⅀IdlD`, `⅀AssocD`) — those
--- are kept transparent in `Universe.IRDerived`.
 -- ============================================================================
 module HoTTOperads.Free.HIT where
 
@@ -366,7 +357,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
                              (invEquiv (⟦⅀⟧ A' C)))
     ⅀-subst-path-equiv p C = equivEq (funExt (transp-⅀-subst-path p C))
 
-  -- Sanity probe: `⅀Assoc-C' A B C` unfolds definitionally to its `η`-form on Σ,
+  -- `⅀Assoc-C' A B C` unfolds definitionally to its `η`-form on Σ,
   -- i.e. `λ ab → C (fst (⟦⅀⟧ ab)) (snd (⟦⅀⟧ ab))`. We record this with `refl` so
   -- downstream `cong`s can rewrite under it without needing to unfold `⅀Assoc-C'`
   -- by hand. Used by `eq-leaf`'s `funExt-q-decomp`.
@@ -388,7 +379,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
   -- call site shrinks from ~30 lines of substComposite/cong bookkeeping to
   -- a 1-line specialisation.
   --
-  -- Recipe (each step a separate opaque lemma below):
+  -- Recipe:
   --   (a) `Assoc-cont A B C p` — the explicit Σ-shuffle that
   --       `equivFun (⅀Assoc≃ A B C)` unfolds to (this is `compEquiv`
   --       reducing definitionally on Σ).
@@ -407,7 +398,6 @@ module _ {𝒰 : Universe ℓc ℓe} where
 
   -- (e) Adjunction coherence: `invEq` of `secEq` equals `retEq` of `invEq`.
   --     A general groupoid fact derived from `EquivJ` at `idEquiv`.
-  --     Not opaque (equivalence-induction stays accessible to consumers).
   adj-coh : ∀ {ℓ} {X Y : Type ℓ} (e : X ≃ Y) (y : Y)
           → cong (invEq e) (secEq e y) ≡ retEq e (invEq e y)
   adj-coh {Y = Y} e =
@@ -419,7 +409,6 @@ module _ {𝒰 : Universe ℓc ℓe} where
   --     so `equivFun (⅀Assoc≃ A B C) y` reduces definitionally to
   --     `Assoc-cont A B C (equivFun (⟦⅀⟧ A _) y)`. Naming the shuffle once
   --     means downstream sites never have to inline the Σ bookkeeping.
-  --     Not opaque (it's a plain term, used as a *target* of normalisation).
   Assoc-cont : (A : Code) (B : El A → Code)
                (C : (a : El A) → El (B a) → Code)
                (p : Σ (El A) (λ a → El (⅀ (B a) (C a))))
@@ -1063,9 +1052,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong (invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))) (σ-bridge x)
           ∙ sym (RHS-chain x)
 
-      -- Pointwise equality, packaged as `pathToEquiv`-equality. NOT opaque:
-      -- the .equiv-proof projection must remain accessible for downstream
-      -- `Inj`-image computations.
+      -- Pointwise equality, packaged as `pathToEquiv`-equality.
       equivs-agree : pathToEquiv (cong El (⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C)))
                    ≡ pathToEquiv (cong El (cong (⅀ (B α)) q
                                         ∙ ⅀-subst-path (⅀IdlD 𝒰 B) (⅀Assoc-C' 𝜏 B C)))
@@ -2189,8 +2176,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong (transport (cong El (cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail)))
                  (retEq (⟦⅀⟧ A' B-LHS) x)
 
-      -- Pointwise-equality packaged as `pathToEquiv`-equality. NOT opaque
-      -- (equivalence-valued; see §1 opacity rules).
+      -- Pointwise-equality packaged as `pathToEquiv`-equality.
       equivs-agree-node : pathToEquiv (cong El LHS-path)
                         ≡ pathToEquiv (cong El (cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail))
       equivs-agree-node = equivEq (funExt pointwise-node)
@@ -2260,11 +2246,8 @@ module _ {𝒰 : Universe ℓc ℓe} where
   --
   -- The free 𝒰-operad on K, assembled from `leaf`, `graft`, and the three laws.
   -- ============================================================================
-  isSetFreeOps : (K : Code → Type ℓk) (A : Code) → isSet (FreeOps K A)
-  isSetFreeOps K A = set A
-
   FreeOperad : (K : Code → Type ℓk) → Operad 𝒰 (FreeOps K)
-  Operad.isSetK (FreeOperad K) = isSetFreeOps K
+  Operad.isSetK (FreeOperad K) = set
   Operad.id     (FreeOperad K) = leaf
   Operad.compₒ  (FreeOperad K) = graft K
   Operad.idl    (FreeOperad K) = graft-idl K
