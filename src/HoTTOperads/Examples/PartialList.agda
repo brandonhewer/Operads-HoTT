@@ -17,7 +17,9 @@ open import Cubical.Data.Sigma using (_×_ ; _,_)
 
 open import HoTTOperads.Universe.Base
 open import HoTTOperads.Universe.Instances.Nat using
-  ( 𝓝 ; sum ; inj-l-+ ; inj-r-+ ; sumFinFwd )
+  ( 𝓝 ; sum ; inj-l-+ ; inj-r-+ ; sumFinFwd ; ⅀Assoc-C'-on-inl ; ⅀Assoc-C'-on-inr )
+open import HoTTOperads.Prelude.Path using (isSet→subst-PathP)
+open import HoTTOperads.Prelude.Nat using (absurd-≤? ; absurd-+-≤?)
 open import HoTTOperads.Operad.Base
 open import HoTTOperads.Operad.Specialised.NonSymm using (NonSymmOperad)
 
@@ -125,14 +127,12 @@ opaque
 -- two such paths.
 ------------------------------------------------------------------------
 private
-  opaque
-    swap-PathP : ∀ {A : Type ℓ} {m n}
-                 {x : PartialList A m} {y : PartialList A n}
-                 (p q : m ≡ n)
-               → PathP (λ i → PartialList A (p i)) x y
-               → PathP (λ i → PartialList A (q i)) x y
-    swap-PathP {x = x} {y = y} p q path =
-      subst (λ r → PathP (λ i → PartialList _ (r i)) x y) (isSetℕ _ _ p q) path
+  swap-PathP : ∀ {A : Type ℓ} {m n}
+               {x : PartialList A m} {y : PartialList A n}
+               (p q : m ≡ n)
+             → PathP (λ i → PartialList A (p i)) x y
+             → PathP (λ i → PartialList A (q i)) x y
+  swap-PathP {A = A} p q path = isSet→subst-PathP isSetℕ {B = PartialList A} p q path
 
 ------------------------------------------------------------------------
 -- The sum over Fin (m + n) splits into a prefix and suffix sum, in the
@@ -389,63 +389,40 @@ private
                   (compPathP' {B = PartialList A} stage4 stage5))
 
 ------------------------------------------------------------------------
--- Universe-level reduction lemmas for ⅀Assoc-C', copied (with private
--- visibility) from HoTTOperads.Universe.Instances.Nat.  These are the
--- key combinators needed for `pl-assoc`.
+-- Value-level bridge lemmas: relate kss-suc on inj-l-+ / inj-r-+
+-- back to kss / (kss ∘ fsuc). The universe-level ⅀Assoc-C'-on-inl /
+-- ⅀Assoc-C'-on-inr lemmas are re-used from Universe.Instances.Nat;
+-- they are opaque there, so we unfold them inside this block to allow
+-- the with-clauses below to reduce.
 ------------------------------------------------------------------------
 private
  opaque
-  ⅀Assoc-C'-on-inl-PL : (A' : ℕ) (B : Fin (suc A') → ℕ)
-                        (C : (a : Fin (suc A')) → Fin (B a) → ℕ)
-                        (i : Fin (B fzero))
-                      → Universe.⅀Assoc-C' 𝓝 (suc A') B C
-                          (inj-l-+ (B fzero) (sum A' (B ∘ fsuc)) i)
-                      ≡ C fzero i
-  ⅀Assoc-C'-on-inl-PL A' B C (k , k<m) with k ≤? B fzero
-  ... | inl _   = cong (C fzero) (Fin-fst-≡ refl)
-  ... | inr B≤k = ⊥-rec (¬m<m (≤<-trans B≤k k<m))
-
-  ⅀Assoc-C'-on-inr-PL : (A' : ℕ) (B : Fin (suc A') → ℕ)
-                        (C : (a : Fin (suc A')) → Fin (B a) → ℕ)
-                        (i : Fin (sum A' (B ∘ fsuc)))
-                      → Universe.⅀Assoc-C' 𝓝 (suc A') B C
-                          (inj-r-+ (B fzero) (sum A' (B ∘ fsuc)) i)
-                      ≡ Universe.⅀Assoc-C' 𝓝 A' (B ∘ fsuc) (λ a' → C (fsuc a')) i
-  ⅀Assoc-C'-on-inr-PL A' B C (k , klt) with (B fzero + k) ≤? B fzero
-  ... | inl B+k<B  = ⊥-rec (¬m+n<m {m = B fzero} {n = k} B+k<B)
-  ... | inr B≤B+k  =
-    cong (λ x → C (fsuc (fst x)) (snd x))
-         (cong (sumFinFwd A' (B ∘ fsuc))
-               (Fin-fst-≡ ((cong (_∸ B fzero) (+-comm (B fzero) k))
-                          ∙ m+n∸n=m (B fzero) k)))
-
-  -- Value-level bridge lemmas: relate kss-suc on inj-l-+ / inj-r-+
-  -- back to kss / (kss ∘ fsuc).
+  unfolding ⅀Assoc-C'-on-inl ⅀Assoc-C'-on-inr
   kss-bridge-L :
     ∀ {A : Type ℓ} (A' : ℕ) (B : Fin (suc A') → ℕ)
       (C : (a : Fin (suc A')) → Fin (B a) → ℕ)
       (kss : (a : Fin (suc A')) (b : Fin (B a)) → PartialList A (C a b))
       (kp : Fin (B fzero))
-    → PathP (λ i → PartialList A (⅀Assoc-C'-on-inl-PL A' B C kp i))
+    → PathP (λ i → PartialList A (⅀Assoc-C'-on-inl A' B C kp i))
             (kss (fst (sumFinFwd (suc A') B (inj-l-+ (B fzero) (sum A' (B ∘ fsuc)) kp)))
                  (snd (sumFinFwd (suc A') B (inj-l-+ (B fzero) (sum A' (B ∘ fsuc)) kp))))
             (kss fzero kp)
   kss-bridge-L A' B C kss (k , k<m) with k ≤? B fzero
   ... | inl _   = λ i → kss fzero (Fin-fst-≡ {i = (k , _)} {j = (k , k<m)} refl i)
-  ... | inr B≤k = ⊥-rec (¬m<m (≤<-trans B≤k k<m))
+  ... | inr B≤k = absurd-≤? B≤k k<m
 
   kss-bridge-R :
     ∀ {A : Type ℓ} (A' : ℕ) (B : Fin (suc A') → ℕ)
       (C : (a : Fin (suc A')) → Fin (B a) → ℕ)
       (kss : (a : Fin (suc A')) (b : Fin (B a)) → PartialList A (C a b))
       (kp : Fin (sum A' (B ∘ fsuc)))
-    → PathP (λ i → PartialList A (⅀Assoc-C'-on-inr-PL A' B C kp i))
+    → PathP (λ i → PartialList A (⅀Assoc-C'-on-inr A' B C kp i))
             (kss (fst (sumFinFwd (suc A') B (inj-r-+ (B fzero) (sum A' (B ∘ fsuc)) kp)))
                  (snd (sumFinFwd (suc A') B (inj-r-+ (B fzero) (sum A' (B ∘ fsuc)) kp))))
             (kss (fsuc (fst (sumFinFwd A' (B ∘ fsuc) kp)))
                  (snd (sumFinFwd A' (B ∘ fsuc) kp)))
   kss-bridge-R A' B C kss (k , klt) with (B fzero + k) ≤? B fzero
-  ... | inl B+k<B  = ⊥-rec (¬m+n<m {m = B fzero} {n = k} B+k<B)
+  ... | inl B+k<B  = absurd-+-≤? {b = B fzero} {k = k} B+k<B
   ... | inr B≤B+k  =
     λ i → kss (fsuc (fst (sumFinFwd A' (B ∘ fsuc)
                             (Fin-fst-≡ {i = (B fzero + k ∸ B fzero , _)} {j = (k , klt)}
@@ -530,12 +507,12 @@ private
       -- Reindex paths on C-suc components, supplied by ⅀Assoc-C'-on-inl/inr.
       L-reix : (kp : Fin (ms fzero))
              → (C-suc ∘ inj-l-+ (ms fzero) (sum m' ms')) kp ≡ mss fzero kp
-      L-reix kp = ⅀Assoc-C'-on-inl-PL m' ms mss kp
+      L-reix kp = ⅀Assoc-C'-on-inl m' ms mss kp
 
       R-reix : (kp : Fin (sum m' ms'))
              → (C-suc ∘ inj-r-+ (ms fzero) (sum m' ms')) kp
                ≡ Universe.⅀Assoc-C' 𝓝 m' ms' mss' kp
-      R-reix kp = ⅀Assoc-C'-on-inr-PL m' ms mss kp
+      R-reix kp = ⅀Assoc-C'-on-inr m' ms mss kp
 
       L-vs-bridge :
         (kp : Fin (ms fzero))

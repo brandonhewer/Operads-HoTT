@@ -1,5 +1,5 @@
 {-# OPTIONS --cubical #-}
--- TODO(safe): discharge the universal property of the free operad (FreeOperad.tex 357-368).
+
 module HoTTOperads.Free.Universal where
 
 open import Cubical.Foundations.Prelude
@@ -9,9 +9,7 @@ open import Cubical.Data.Sigma
 open import HoTTOperads.Universe.Base
 open import HoTTOperads.Operad.Base
 open import HoTTOperads.Operad.Morphism
-open import HoTTOperads.Free.IR
-open import HoTTOperads.Free.IR.Sethood using (Fiber)
-open import HoTTOperads.Free.Operad using (FreeOps' ; FreeOperad)
+open import HoTTOperads.Free.HIT
 
 private
   variable
@@ -22,7 +20,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
 
   -- The unit of the free adjunction.
   postulate
-    η : (A : Code) → K A → FreeOps' {𝒰 = 𝒰} K A
+    η : (A : Code) → K A → FreeOps {𝒰 = 𝒰} K A
 
   -- Interpretation: given a target operad and a morphism of species, lift to operad map.
   postulate

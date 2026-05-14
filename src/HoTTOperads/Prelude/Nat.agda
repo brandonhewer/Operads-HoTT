@@ -12,13 +12,13 @@ open import Cubical.Data.Nat public hiding (elim)
 open import Cubical.Data.Nat.Properties public using (+-zero ; +-suc ; +-comm ; +-assoc)
 open import Cubical.Data.Nat.Order using
   ( _≤_ ; _<_ ; suc-≤-suc ; zero-≤ ; isProp≤ ; pred-≤-pred ; ¬-<-zero ; <-k+
-  ; ¬m<m ; ≤<-trans ; ¬m+n<m )
+  ; ¬m<m ; ≤<-trans ; ¬m+n<m ; <-k+-cancel ; ≤-trans ; ≤-reflexive ; ≤SumLeft )
 open import Cubical.Data.Fin public using (Fin ; fzero ; fsuc)
 open import Cubical.Data.Fin.Properties using
   ( Fin-fst-≡ ; isSetFin ; Fin+≅Fin⊎Fin ; _≤?_ ; o<m→o<m+n ; ∸-<-lemma
   ; m+n∸n=m ; ∸-lemma )
 open import Cubical.Data.Sigma
-open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-fst ; Σ≡Prop)
+open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-fst ; Σ≡Prop ; ΣPathP)
 open import Cubical.Data.Sum using (_⊎_ ; inl ; inr)
 open import Cubical.Data.Sum.Properties using (⊎-equiv ; Σ⊎≃)
 open import Cubical.Data.Empty using () renaming (rec to ⊥-rec)
@@ -391,3 +391,485 @@ absurd-+-≤? {b = b} {k = k} = ⊥-rec ∘ ¬m+n<m {m = b} {n = k}
 cong-Fin-fst : ∀ {ℓ'} {n : ℕ} {B : Fin n → Type ℓ'}
                {i j : Fin n} → fst i ≡ fst j → B i ≡ B j
 cong-Fin-fst {B = B} p = cong B (Fin-fst-≡ p)
+
+------------------------------------------------------------------------
+-- (m+n)-level Fubini for `sum` and `sumFinFwd`. Generic Fin/ℕ-Fubini
+-- facts (no operadic content); used to discharge the add↑ case of
+-- `IExpr-assoc` and any other (m+n)-indexed consumer. All sealed
+-- `opaque` so they normalise once and are referenced by name downstream.
+------------------------------------------------------------------------
+
+opaque
+  -- The sum over `Fin (m + n)` splits along `inj-l-+`/`inj-r-+` into
+  -- the m-prefix sum plus the n-suffix sum. Direct induction on m;
+  -- avoids depending on `sumFinEquiv`. Used as the index path for every
+  -- PathP that bridges a (m+n)-level definition with its left/right halves.
+  sum-split : (m n : ℕ) (B : Fin (m + n) → ℕ)
+            → sum (m + n) B
+            ≡ sum m (B ∘ inj-l-+ m n) + sum n (B ∘ inj-r-+ m n)
+  sum-split zero    n B =
+    cong (sum n) (funExt λ kp → cong B (Fin-fst-≡ refl))
+  sum-split (suc m) n B =
+      B fzero + sum (m + n) (B ∘ fsuc)
+        ≡⟨ cong (B fzero +_) (sum-split m n (B ∘ fsuc)) ⟩
+      B fzero + (sum m (B ∘ fsuc ∘ inj-l-+ m n) + sum n (B ∘ fsuc ∘ inj-r-+ m n))
+        ≡⟨ +-assoc (B fzero) _ _ ⟩
+      (B fzero + sum m (B ∘ fsuc ∘ inj-l-+ m n)) + sum n (B ∘ fsuc ∘ inj-r-+ m n)
+        ≡⟨ cong₂ _+_ left-eq right-eq ⟩
+      sum (suc m) (B ∘ inj-l-+ (suc m) n) + sum n (B ∘ inj-r-+ (suc m) n) ∎
+    where
+      left-eq : B fzero + sum m (B ∘ fsuc ∘ inj-l-+ m n)
+              ≡ B (inj-l-+ (suc m) n fzero) + sum m (B ∘ inj-l-+ (suc m) n ∘ fsuc)
+      left-eq = cong₂ _+_ (cong B (Fin-fst-≡ refl))
+                          (cong (sum m) (funExt λ kp → cong B (Fin-fst-≡ refl)))
+      right-eq : sum n (B ∘ fsuc ∘ inj-r-+ m n) ≡ sum n (B ∘ inj-r-+ (suc m) n)
+      right-eq = cong (sum n) (funExt λ kp → cong B (Fin-fst-≡ refl))
+
+------------------------------------------------------------------------
+-- Suc-level wrappers for `sumFinFwd` on `Fin (suc n)`. Each wrap pins
+-- one of the two clauses of `sumFinFwd`'s `with k ≤? B fzero` as a
+-- propositional equation; without these the with-elaboration leaks the
+-- underlying _≤?_ trichotomy into the caller goal type.
+------------------------------------------------------------------------
+
+opaque
+  -- inl branch, fst projection: when `k < B fzero`, the index lands at
+  -- `fzero`. This is `refl` after the with-clause matches.
+  sumFinFwd-suc-inl-fst :
+    (n : ℕ) (B : Fin (suc n) → ℕ) (k : ℕ) (klt : k < sum (suc n) B)
+    (k<B0 : k < B fzero)
+    → fst (sumFinFwd (suc n) B (k , klt)) ≡ fzero
+  sumFinFwd-suc-inl-fst n B k klt k<B0 with k ≤? B fzero
+  ... | inl _    = refl
+  ... | inr B0≤k = absurd-≤? B0≤k k<B0
+
+opaque
+  unfolding sumFinFwd-suc-inl-fst
+  -- PathP twin of `sumFinFwd-suc-inl-fst`: heterogeneous bridge of the
+  -- snd-component over the family it produces.
+  sumFinFwd-suc-inl-snd :
+    (n : ℕ) (B : Fin (suc n) → ℕ) (k : ℕ) (klt : k < sum (suc n) B)
+    (k<B0 : k < B fzero)
+    → PathP (λ i → Fin (B (sumFinFwd-suc-inl-fst n B k klt k<B0 i)))
+            (snd (sumFinFwd (suc n) B (k , klt)))
+            (k , k<B0)
+  sumFinFwd-suc-inl-snd n B k klt k<B0 with k ≤? B fzero
+  ... | inl k<B0' = ΣPathP {A = λ _ → ℕ} {B = λ _ k' → k' < B fzero}
+                            (refl , isProp→PathP (λ _ → isProp≤) k<B0' k<B0)
+  ... | inr B0≤k  = absurd-≤? B0≤k k<B0
+
+opaque
+  -- inr branch, fst projection: when `B fzero ≤ k`, the index is
+  -- `fsuc (fst (sumFinFwd n (B ∘ fsuc) (k ∸ B fzero , …)))`.
+  sumFinFwd-suc-inr-fst :
+    (n : ℕ) (B : Fin (suc n) → ℕ) (k : ℕ) (klt : k < sum (suc n) B)
+    (B0≤k : B fzero ≤ k)
+    → fst (sumFinFwd (suc n) B (k , klt))
+    ≡ fsuc (fst (sumFinFwd n (B ∘ fsuc)
+                              (k ∸ B fzero
+                              , ∸-<-lemma (B fzero) (sum n (B ∘ fsuc)) k klt B0≤k)))
+  sumFinFwd-suc-inr-fst n B k klt B0≤k with k ≤? B fzero
+  ... | inl k<B0  = absurd-≤? B0≤k k<B0
+  ... | inr B0≤k' = cong (λ p → fsuc (fst (sumFinFwd n (B ∘ fsuc)
+                                                        (k ∸ B fzero
+                                                        , ∸-<-lemma (B fzero) (sum n (B ∘ fsuc))
+                                                                     k klt p))))
+                          (isProp≤ B0≤k' B0≤k)
+
+opaque
+  unfolding sumFinFwd-suc-inr-fst
+  -- PathP twin of `sumFinFwd-suc-inr-fst`.
+  sumFinFwd-suc-inr-snd :
+    (n : ℕ) (B : Fin (suc n) → ℕ) (k : ℕ) (klt : k < sum (suc n) B)
+    (B0≤k : B fzero ≤ k)
+    → PathP (λ i → Fin (B (sumFinFwd-suc-inr-fst n B k klt B0≤k i)))
+            (snd (sumFinFwd (suc n) B (k , klt)))
+            (snd (sumFinFwd n (B ∘ fsuc)
+                              (k ∸ B fzero
+                              , ∸-<-lemma (B fzero) (sum n (B ∘ fsuc)) k klt B0≤k)))
+  sumFinFwd-suc-inr-snd n B k klt B0≤k with k ≤? B fzero
+  ... | inl k<B0  = absurd-≤? B0≤k k<B0
+  ... | inr B0≤k' =
+    λ i → snd (sumFinFwd n (B ∘ fsuc)
+                            (k ∸ B fzero
+                            , ∸-<-lemma (B fzero) (sum n (B ∘ fsuc))
+                                         k klt (isProp≤ B0≤k' B0≤k i)))
+
+------------------------------------------------------------------------
+-- (m+n)-level Fubini for `sumFinFwd`: the inverse-of-sum-split fact at
+-- the level of the canonical pre-images. By induction on m using the
+-- four `…-suc-inl/inr-{fst,snd}` wrappers above as the propositional
+-- carriers for the with-clauses.
+------------------------------------------------------------------------
+
+opaque
+  unfolding sumFinFwd-suc-inl-fst sumFinFwd-suc-inl-snd
+            sumFinFwd-suc-inr-fst sumFinFwd-suc-inr-snd
+  -- Left-half: when the flat index `k < sum m (B ∘ inj-l-+ m n)`, the
+  -- (m+n)-level `sumFinFwd` lands at `inj-l-+ m n (fst (sumFinFwd m …))`.
+  -- The result is a Σ-pair: an equation on the first component plus a
+  -- heterogeneous PathP on the second component over the family it produces.
+  sumFinFwd-add↑-on-l :
+    (m n : ℕ) (B : Fin (m + n) → ℕ) (k : ℕ)
+    (kltₗ : k < sum m (B ∘ inj-l-+ m n))
+    (klt : k < sum (m + n) B)
+    → Σ[ p ∈ (fst (sumFinFwd (m + n) B (k , klt))
+              ≡ inj-l-+ m n (fst (sumFinFwd m (B ∘ inj-l-+ m n) (k , kltₗ)))) ]
+          PathP (λ i → Fin (B (p i)))
+                (snd (sumFinFwd (m + n) B (k , klt)))
+                (snd (sumFinFwd m (B ∘ inj-l-+ m n) (k , kltₗ)))
+  sumFinFwd-add↑-on-l zero    n B k kltₗ klt = ⊥-rec (¬-<-zero kltₗ)
+  sumFinFwd-add↑-on-l (suc m') n B k kltₗ klt =
+    -- Delegate to a where-helper taking the _≤?_ results as arguments,
+    -- so the outer with-elaboration doesn't reach into sumFinFwd's body.
+    cases (k ≤? B fzero) (k ≤? (B ∘ inj-l-+ (suc m') n) fzero)
+    where
+      cases : ((k < B fzero) ⊎ (B fzero ≤ k))
+            → ((k < (B ∘ inj-l-+ (suc m') n) fzero)
+                ⊎ ((B ∘ inj-l-+ (suc m') n) fzero ≤ k))
+            → Σ[ p ∈ (fst (sumFinFwd (suc m' + n) B (k , klt))
+                      ≡ inj-l-+ (suc m') n
+                          (fst (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))) ]
+                  PathP (λ i → Fin (B (p i)))
+                        (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                        (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+      cases (inl k<B0) (inl k<Bₗ0) =
+        let
+          fst-path : fst (sumFinFwd (suc m' + n) B (k , klt))
+                   ≡ inj-l-+ (suc m') n (fst (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          fst-path = sumFinFwd-suc-inl-fst (m' + n) B k klt k<B0
+                   ∙ Fin-fst-≡ {i = fzero {k = m' + n}}
+                                {j = inj-l-+ (suc m') n fzero} refl
+                   ∙ cong (inj-l-+ (suc m') n)
+                          (sym (sumFinFwd-suc-inl-fst m' (B ∘ inj-l-+ (suc m') n) k kltₗ k<Bₗ0))
+
+          fst-snd-ℕ-eq : fst (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                       ≡ fst (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          fst-snd-ℕ-eq =
+              (λ i → fst (sumFinFwd-suc-inl-snd (m' + n) B k klt k<B0 i))
+            ∙ sym (λ i → fst (sumFinFwd-suc-inl-snd m' (B ∘ inj-l-+ (suc m') n)
+                                                     k kltₗ k<Bₗ0 i))
+
+          snd-path : PathP (λ i → Fin (B (fst-path i)))
+                            (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                            (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          snd-path = toPathP (Fin-fst-≡
+                                (transport-Fin-fst (cong B fst-path)
+                                                    (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                                ∙ fst-snd-ℕ-eq))
+        in fst-path , snd-path
+      cases (inl k<B0) (inr Bₗ0≤k) =
+        absurd-≤? Bₗ0≤k
+          (subst (k <_)
+                 (cong B (Fin-fst-≡ {i = fzero}
+                                     {j = inj-l-+ (suc m') n fzero} refl))
+                 k<B0)
+      cases (inr B0≤k) (inl k<Bₗ0) =
+        absurd-≤? B0≤k
+          (subst (k <_)
+                 (sym (cong B (Fin-fst-≡ {i = fzero}
+                                          {j = inj-l-+ (suc m') n fzero} refl)))
+                 k<Bₗ0)
+      cases (inr B0≤k) (inr Bₗ0≤k) =
+        let
+          ∸-bridge : k ∸ B fzero ≡ k ∸ (B ∘ inj-l-+ (suc m') n) fzero
+          ∸-bridge = cong (k ∸_) (cong B (Fin-fst-≡ {i = fzero}
+                                                      {j = inj-l-+ (suc m') n fzero} refl))
+
+          klt-rec : k ∸ B fzero < sum (m' + n) (B ∘ fsuc)
+          klt-rec = ∸-<-lemma (B fzero) (sum (m' + n) (B ∘ fsuc)) k klt B0≤k
+
+          kltₗ-rec : k ∸ (B ∘ inj-l-+ (suc m') n) fzero
+                   < sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)
+          kltₗ-rec = ∸-<-lemma ((B ∘ inj-l-+ (suc m') n) fzero)
+                                (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)) k kltₗ Bₗ0≤k
+
+          kltₗ-rec' : k ∸ B fzero < sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n)
+          kltₗ-rec' = subst (k ∸ B fzero <_)
+                             (cong (sum m')
+                                   (funExt λ a → cong B (Fin-fst-≡
+                                     {i = inj-l-+ (suc m') n (fsuc a)}
+                                     {j = fsuc (inj-l-+ m' n a)} refl)))
+                             (subst (_< sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc))
+                                    (sym ∸-bridge)
+                                    kltₗ-rec)
+
+          IH : Σ[ p ∈ (fst (sumFinFwd (m' + n) (B ∘ fsuc) (k ∸ B fzero , klt-rec))
+                       ≡ inj-l-+ m' n (fst (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n)
+                                                          (k ∸ B fzero , kltₗ-rec')))) ]
+                    PathP (λ i → Fin ((B ∘ fsuc) (p i)))
+                          (snd (sumFinFwd (m' + n) (B ∘ fsuc) (k ∸ B fzero , klt-rec)))
+                          (snd (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n)
+                                            (k ∸ B fzero , kltₗ-rec')))
+          IH = sumFinFwd-add↑-on-l m' n (B ∘ fsuc) (k ∸ B fzero) kltₗ-rec' klt-rec
+
+          fam-eq : (a : Fin m') → (B ∘ fsuc) (inj-l-+ m' n a) ≡ (B ∘ inj-l-+ (suc m') n) (fsuc a)
+          fam-eq a = cong B (Fin-fst-≡ {i = fsuc (inj-l-+ m' n a)}
+                                         {j = inj-l-+ (suc m') n (fsuc a)} refl)
+
+          rec-input-PathP : PathP (λ i → Fin (sum m' (λ a → fam-eq a i)))
+                                   (k ∸ B fzero , kltₗ-rec')
+                                   (k ∸ (B ∘ inj-l-+ (suc m') n) fzero , kltₗ-rec)
+          rec-input-PathP = ΣPathP {A = λ _ → ℕ}
+                                    {B = λ i k' → k' < sum m' (λ a → fam-eq a i)}
+                                    (∸-bridge , isProp→PathP (λ _ → isProp≤)
+                                                             kltₗ-rec' kltₗ-rec)
+
+          rec-bridge : PathP (λ i → Σ (Fin m') (λ a → Fin (fam-eq a i)))
+                              (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n) (k ∸ B fzero , kltₗ-rec'))
+                              (sumFinFwd m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)
+                                            (k ∸ (B ∘ inj-l-+ (suc m') n) fzero , kltₗ-rec))
+          rec-bridge i = sumFinFwd m' (λ a → fam-eq a i) (rec-input-PathP i)
+
+          rec-bridge-fst : Path (Fin m')
+                                  (fst (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n)
+                                                      (k ∸ B fzero , kltₗ-rec')))
+                                  (fst (sumFinFwd m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)
+                                                      (k ∸ (B ∘ inj-l-+ (suc m') n) fzero
+                                                      , kltₗ-rec)))
+          rec-bridge-fst i = fst (rec-bridge i)
+
+          fst-path : fst (sumFinFwd (suc m' + n) B (k , klt))
+                   ≡ inj-l-+ (suc m') n (fst (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n)
+                                                                   (k , kltₗ)))
+          fst-path = sumFinFwd-suc-inr-fst (m' + n) B k klt B0≤k
+                    ∙ cong fsuc (IH .fst)
+                    ∙ cong fsuc (cong (inj-l-+ m' n) rec-bridge-fst)
+                    ∙ Fin-fst-≡ refl
+                    ∙ cong (inj-l-+ (suc m') n)
+                           (sym (sumFinFwd-suc-inr-fst m' (B ∘ inj-l-+ (suc m') n) k kltₗ Bₗ0≤k))
+
+          fst-of-snd-LHS-eq :
+              fst (snd (sumFinFwd (suc m' + n) B (k , klt)))
+            ≡ fst (snd (sumFinFwd (m' + n) (B ∘ fsuc) (k ∸ B fzero , klt-rec)))
+          fst-of-snd-LHS-eq i = fst (sumFinFwd-suc-inr-snd (m' + n) B k klt B0≤k i)
+
+          IH-snd-fst-eq :
+              fst (snd (sumFinFwd (m' + n) (B ∘ fsuc) (k ∸ B fzero , klt-rec)))
+            ≡ fst (snd (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n) (k ∸ B fzero , kltₗ-rec')))
+          IH-snd-fst-eq i = fst (IH .snd i)
+
+          rec-bridge-snd-fst-eq :
+              fst (snd (sumFinFwd m' ((B ∘ fsuc) ∘ inj-l-+ m' n) (k ∸ B fzero , kltₗ-rec')))
+            ≡ fst (snd (sumFinFwd m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)
+                                    (k ∸ (B ∘ inj-l-+ (suc m') n) fzero , kltₗ-rec)))
+          rec-bridge-snd-fst-eq i = fst (snd (rec-bridge i))
+
+          fst-of-snd-RHS-eq :
+              fst (snd (sumFinFwd m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)
+                                    (k ∸ (B ∘ inj-l-+ (suc m') n) fzero , kltₗ-rec)))
+            ≡ fst (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          fst-of-snd-RHS-eq i = fst (sumFinFwd-suc-inr-snd m' (B ∘ inj-l-+ (suc m') n)
+                                                            k kltₗ Bₗ0≤k (~ i))
+
+          fst-snd-ℕ-eq : fst (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                       ≡ fst (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          fst-snd-ℕ-eq = fst-of-snd-LHS-eq ∙ IH-snd-fst-eq
+                       ∙ rec-bridge-snd-fst-eq ∙ fst-of-snd-RHS-eq
+
+          snd-path : PathP (λ i → Fin (B (fst-path i)))
+                            (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                            (snd (sumFinFwd (suc m') (B ∘ inj-l-+ (suc m') n) (k , kltₗ)))
+          snd-path = toPathP (Fin-fst-≡
+                                (transport-Fin-fst (cong B fst-path)
+                                                    (snd (sumFinFwd (suc m' + n) B (k , klt)))
+                                ∙ fst-snd-ℕ-eq))
+        in fst-path , snd-path
+
+opaque
+  unfolding sumFinFwd-suc-inr-fst sumFinFwd-suc-inr-snd
+  -- Right-half: when the flat index is `sum m (B ∘ inj-l-+ m n) + k` and
+  -- `k < sum n (B ∘ inj-r-+ m n)`, the (m+n)-level `sumFinFwd` lands at
+  -- `inj-r-+ m n (fst (sumFinFwd n …))`. Same Σ-pair shape as on-l.
+  sumFinFwd-add↑-on-r :
+    (m n : ℕ) (B : Fin (m + n) → ℕ) (k : ℕ)
+    (kltᵣ : k < sum n (B ∘ inj-r-+ m n))
+    (klt : sum m (B ∘ inj-l-+ m n) + k < sum (m + n) B)
+    → Σ[ p ∈ (fst (sumFinFwd (m + n) B (sum m (B ∘ inj-l-+ m n) + k , klt))
+              ≡ inj-r-+ m n (fst (sumFinFwd n (B ∘ inj-r-+ m n) (k , kltᵣ)))) ]
+          PathP (λ i → Fin (B (p i)))
+                (snd (sumFinFwd (m + n) B (sum m (B ∘ inj-l-+ m n) + k , klt)))
+                (snd (sumFinFwd n (B ∘ inj-r-+ m n) (k , kltᵣ)))
+  sumFinFwd-add↑-on-r zero    n B k kltᵣ klt =
+    -- m = 0: index reduces to 0 + k = k; inj-r-+ 0 n is propositionally identity.
+    let
+      fam-path : (a : Fin n) → B a ≡ (B ∘ inj-r-+ zero n) a
+      fam-path a = cong B (Fin-fst-≡ {i = a} {j = inj-r-+ zero n a} refl)
+
+      rec-input-PathP : PathP (λ i → Fin (sum n (λ a → fam-path a i))) (k , klt) (k , kltᵣ)
+      rec-input-PathP = ΣPathP {A = λ _ → ℕ}
+                                {B = λ i k' → k' < sum n (λ a → fam-path a i)}
+                                (refl , isProp→PathP (λ _ → isProp≤) klt kltᵣ)
+
+      rec-bridge : PathP (λ i → Σ (Fin n) (λ a → Fin (fam-path a i)))
+                          (sumFinFwd n B (k , klt))
+                          (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ))
+      rec-bridge i = sumFinFwd n (λ a → fam-path a i) (rec-input-PathP i)
+
+      fst-path : fst (sumFinFwd n B (k , klt))
+               ≡ inj-r-+ zero n (fst (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ)))
+      fst-path = (λ i → fst (rec-bridge i))
+               ∙ Fin-fst-≡ {i = fst (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ))}
+                            {j = inj-r-+ zero n (fst (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ)))}
+                            refl
+
+      fst-snd-ℕ-eq : fst (snd (sumFinFwd n B (k , klt)))
+                   ≡ fst (snd (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ)))
+      fst-snd-ℕ-eq i = fst (snd (rec-bridge i))
+
+      snd-path : PathP (λ i → Fin (B (fst-path i)))
+                        (snd (sumFinFwd n B (k , klt)))
+                        (snd (sumFinFwd n (B ∘ inj-r-+ zero n) (k , kltᵣ)))
+      snd-path = toPathP (Fin-fst-≡
+                            (transport-Fin-fst (cong B fst-path)
+                                                (snd (sumFinFwd n B (k , klt)))
+                            ∙ fst-snd-ℕ-eq))
+    in fst-path , snd-path
+  sumFinFwd-add↑-on-r (suc m') n B k kltᵣ klt =
+    -- Index: sum (suc m') Bₗ + k; always in inr branch of _≤?_ at top level.
+    let
+      Bₗ-fzero-eq : B fzero ≡ (B ∘ inj-l-+ (suc m') n) fzero
+      Bₗ-fzero-eq = cong B (Fin-fst-≡ {i = fzero} {j = inj-l-+ (suc m') n fzero} refl)
+
+      index-bridge : sum (suc m') (B ∘ inj-l-+ (suc m') n) + k
+                   ≡ B fzero + (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc) + k)
+      index-bridge = cong (_+ k) (cong (_+ sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc))
+                                        (sym Bₗ-fzero-eq))
+                    ∙ sym (+-assoc (B fzero) (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc)) k)
+
+      full-klt : B fzero + (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc) + k)
+               < B fzero + sum (m' + n) (B ∘ fsuc)
+      full-klt = subst (_< B fzero + sum (m' + n) (B ∘ fsuc)) index-bridge klt
+
+      klt-inner : sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc) + k < sum (m' + n) (B ∘ fsuc)
+      klt-inner = <-k+-cancel {k = B fzero} full-klt
+
+      sum-prefix-fam-path : (a : Fin m')
+                          → (B ∘ inj-l-+ (suc m') n) (fsuc a) ≡ (B ∘ fsuc) (inj-l-+ m' n a)
+      sum-prefix-fam-path a = cong B (Fin-fst-≡ {i = inj-l-+ (suc m') n (fsuc a)}
+                                                   {j = fsuc (inj-l-+ m' n a)} refl)
+
+      klt-inner' : sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k < sum (m' + n) (B ∘ fsuc)
+      klt-inner' = subst (_< sum (m' + n) (B ∘ fsuc))
+                          (cong (_+ k) (cong (sum m') (funExt sum-prefix-fam-path)))
+                          klt-inner
+
+      Bᵣ-fsuc-eq : (a : Fin n)
+                  → (B ∘ inj-r-+ (suc m') n) a ≡ (B ∘ fsuc) (inj-r-+ m' n a)
+      Bᵣ-fsuc-eq a = cong B (Fin-fst-≡ {i = inj-r-+ (suc m') n a}
+                                          {j = fsuc (inj-r-+ m' n a)} refl)
+
+      kltᵣ' : k < sum n ((B ∘ fsuc) ∘ inj-r-+ m' n)
+      kltᵣ' = subst (k <_) (cong (sum n) (funExt Bᵣ-fsuc-eq)) kltᵣ
+
+      IH : Σ[ p ∈ (fst (sumFinFwd (m' + n) (B ∘ fsuc)
+                                   (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner'))
+                   ≡ inj-r-+ m' n (fst (sumFinFwd n ((B ∘ fsuc) ∘ inj-r-+ m' n) (k , kltᵣ')))) ]
+                PathP (λ i → Fin ((B ∘ fsuc) (p i)))
+                      (snd (sumFinFwd (m' + n) (B ∘ fsuc)
+                                        (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner')))
+                      (snd (sumFinFwd n ((B ∘ fsuc) ∘ inj-r-+ m' n) (k , kltᵣ')))
+      IH = sumFinFwd-add↑-on-r m' n (B ∘ fsuc) k kltᵣ' klt-inner'
+
+      B0≤sum-+-k : B fzero ≤ sum (suc m') (B ∘ inj-l-+ (suc m') n) + k
+      B0≤sum-+-k = ≤-trans (≤-reflexive Bₗ-fzero-eq)
+                            (≤-trans ≤SumLeft ≤SumLeft)
+
+      rec-arg-bound : sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero
+                    < sum (m' + n) (B ∘ fsuc)
+      rec-arg-bound = ∸-<-lemma (B fzero) (sum (m' + n) (B ∘ fsuc))
+                                 (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k) klt B0≤sum-+-k
+
+      inner-index-bridge : sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero
+                         ≡ sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k
+      inner-index-bridge =
+          cong (_∸ B fzero) index-bridge
+        ∙ cong (_∸ B fzero)
+               (+-comm (B fzero) (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc) + k))
+        ∙ m+n∸n=m (B fzero) (sum m' ((B ∘ inj-l-+ (suc m') n) ∘ fsuc) + k)
+        ∙ cong (_+ k) (cong (sum m') (funExt sum-prefix-fam-path))
+
+      rec-arg-PathP : PathP (λ i → Fin (sum (m' + n) (B ∘ fsuc)))
+                            (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero , rec-arg-bound)
+                            (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner')
+      rec-arg-PathP = ΣPathP {A = λ _ → ℕ}
+                              {B = λ _ k' → k' < sum (m' + n) (B ∘ fsuc)}
+                              (inner-index-bridge ,
+                               isProp→PathP (λ _ → isProp≤) rec-arg-bound klt-inner')
+
+      sFF-arg-bridge : PathP (λ i → Σ[ a ∈ Fin (m' + n) ] Fin ((B ∘ fsuc) a))
+                             (sumFinFwd (m' + n) (B ∘ fsuc)
+                                        (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero
+                                        , rec-arg-bound))
+                             (sumFinFwd (m' + n) (B ∘ fsuc)
+                                        (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner'))
+      sFF-arg-bridge i = sumFinFwd (m' + n) (B ∘ fsuc) (rec-arg-PathP i)
+
+      Bᵣ-bridge-input-PathP :
+        PathP (λ i → Fin (sum n (λ a → Bᵣ-fsuc-eq a i))) (k , kltᵣ) (k , kltᵣ')
+      Bᵣ-bridge-input-PathP = ΣPathP {A = λ _ → ℕ}
+                                      {B = λ i k' → k' < sum n (λ a → Bᵣ-fsuc-eq a i)}
+                                      (refl , isProp→PathP (λ _ → isProp≤) kltᵣ kltᵣ')
+
+      Bᵣ-bridge : PathP (λ i → Σ (Fin n) (λ a → Fin (Bᵣ-fsuc-eq a i)))
+                        (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ))
+                        (sumFinFwd n ((B ∘ fsuc) ∘ inj-r-+ m' n) (k , kltᵣ'))
+      Bᵣ-bridge i = sumFinFwd n (λ a → Bᵣ-fsuc-eq a i) (Bᵣ-bridge-input-PathP i)
+
+      fst-path : fst (sumFinFwd (suc m' + n) B (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k , klt))
+               ≡ inj-r-+ (suc m') n (fst (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ)))
+      fst-path =
+          sumFinFwd-suc-inr-fst (m' + n) B
+                                (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k) klt B0≤sum-+-k
+        ∙ cong fsuc (λ i → fst (sFF-arg-bridge i))
+        ∙ cong fsuc (IH .fst)
+        ∙ cong fsuc (cong (inj-r-+ m' n) (sym (λ i → fst (Bᵣ-bridge i))))
+        ∙ Fin-fst-≡ {i = fsuc (inj-r-+ m' n (fst (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ))))}
+                    {j = inj-r-+ (suc m') n (fst (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ)))}
+                    refl
+
+      fst-of-snd-LHS-eq :
+          fst (snd (sumFinFwd (suc m' + n) B (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k , klt)))
+        ≡ fst (snd (sumFinFwd (m' + n) (B ∘ fsuc)
+                              (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero
+                              , rec-arg-bound)))
+      fst-of-snd-LHS-eq i =
+        fst (sumFinFwd-suc-inr-snd (m' + n) B
+               (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k) klt B0≤sum-+-k i)
+
+      sFF-arg-snd-fst-eq :
+          fst (snd (sumFinFwd (m' + n) (B ∘ fsuc)
+                              (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k ∸ B fzero
+                              , rec-arg-bound)))
+        ≡ fst (snd (sumFinFwd (m' + n) (B ∘ fsuc)
+                              (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner')))
+      sFF-arg-snd-fst-eq i = fst (snd (sFF-arg-bridge i))
+
+      IH-snd-fst-eq :
+          fst (snd (sumFinFwd (m' + n) (B ∘ fsuc)
+                              (sum m' ((B ∘ fsuc) ∘ inj-l-+ m' n) + k , klt-inner')))
+        ≡ fst (snd (sumFinFwd n ((B ∘ fsuc) ∘ inj-r-+ m' n) (k , kltᵣ')))
+      IH-snd-fst-eq i = fst (IH .snd i)
+
+      Bᵣ-bridge-snd-fst-eq :
+          fst (snd (sumFinFwd n ((B ∘ fsuc) ∘ inj-r-+ m' n) (k , kltᵣ')))
+        ≡ fst (snd (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ)))
+      Bᵣ-bridge-snd-fst-eq i = fst (snd (Bᵣ-bridge (~ i)))
+
+      fst-snd-ℕ-eq : fst (snd (sumFinFwd (suc m' + n) B
+                                          (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k , klt)))
+                   ≡ fst (snd (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ)))
+      fst-snd-ℕ-eq = fst-of-snd-LHS-eq ∙ sFF-arg-snd-fst-eq
+                   ∙ IH-snd-fst-eq ∙ Bᵣ-bridge-snd-fst-eq
+
+      snd-path : PathP (λ i → Fin (B (fst-path i)))
+                        (snd (sumFinFwd (suc m' + n) B
+                                          (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k , klt)))
+                        (snd (sumFinFwd n (B ∘ inj-r-+ (suc m') n) (k , kltᵣ)))
+      snd-path = toPathP (Fin-fst-≡
+                            (transport-Fin-fst (cong B fst-path)
+                                                (snd (sumFinFwd (suc m' + n) B
+                                                        (sum (suc m') (B ∘ inj-l-+ (suc m') n) + k
+                                                        , klt)))
+                            ∙ fst-snd-ℕ-eq))
+    in fst-path , snd-path

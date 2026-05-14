@@ -1,13 +1,60 @@
 {-# OPTIONS --cubical #-}
--- The free 𝒰-operad on a family K, presented as a higher inductive family.
--- Following FreeOperad.tex (lines 87-118): a HIT with leaf/node/set constructors.
+-- ============================================================================
+-- HoTTOperads.Free.HIT
 --
--- Path-valued helpers (`funExt-q-decomp`, `snd-PathP`, `σ-bridge`, `LHS-chain`,
--- `RHS-chain`, `pointwise`, `bridge` for eq-leaf; `transp-⅀AB-factored`,
--- `transp-C'-eq-on-canonical`, `⟦⅀⟧-on-transp`, `snd-adjust-a'`,
--- `path-bridge-LHS-to-RHS`, … for eq-node) are wrapped in `opaque` to keep
--- cubical reductions sealed.  Never wrap an `isoToEquiv`- or equivalence-valued
--- definition in opaque — its `.equiv-proof` projection is load-bearing.
+-- The free 𝒰-operad on a family K : Code → Type, presented as a higher
+-- inductive family `FreeOps K : Code → Type`. Operadic composition is `graft`,
+-- and we discharge the three coherence laws (left identity, right identity,
+-- associativity) constructively in Cubical Agda. The construction follows
+-- FreeOperad.tex §9 (lines 87-118); the recipe below names the patterns used
+-- pervasively in the associativity proof.
+--
+-- ## File layout
+--
+--   §2  The HIT FreeOps (constructors `leaf`, `node`, `set`).
+--   §3  The composition `graft` (recursive on the first tree).
+--   §4  Substitution toolkit
+--         ⅀-subst-path, graft-subst-fst, graft-subst-snd.
+--       Push `subst (FreeOps K)` across an outer `graft`.
+--   §5  Reduction toolkit
+--         adj-coh, Assoc-cont, Assoc-cont-at-pair, step-Assoc-on-pair,
+--         transp-⅀AssocD-pair, transp-⅀IdlD, transp-⅀-subst-path.
+--       Generic statements about how transports along the universe paths
+--       `Inj (⅀Assoc≃ A B C)`, `⅀AssocD A B C`, and `⅀IdlD X` act on a
+--       *canonical pair* input `invEq (⟦⅀⟧ A …) (a , z)`. Every site in §8
+--       that previously inlined a ~30-line `congFunct`/`substComposite` chain
+--       now invokes one of these.
+--   §6  Left identity `graft-idl`.
+--   §7  Right identity `graft-idr` (cases: leaf | node | set).
+--   §8  Associativity `graft-assoc` (cases: leaf | node | set).
+--   §9  Operad assembly: `isSetFreeOps`, `FreeOperad`.
+--
+-- ## The five-step Recipe used in graft-assoc
+--
+-- Each transport-along-`⅀AssocD`-on-canonical-pair site decomposes as:
+--
+--   (a) `Assoc-cont A B C p` — the explicit Σ-shuffle that `equivFun (⅀Assoc≃
+--       A B C)` unfolds to (by `compEquiv` reducing definitionally on Σ).
+--   (b) `Assoc-cont-at-pair` — `equivFun (⅀Assoc≃) (invEq ⟦⅀⟧ p) ≡ Assoc-cont
+--       p`, by `cong (Assoc-cont _) (secEq …)`.
+--   (c) `step-Assoc-on-pair` — `transport (cong El (Inj (⅀Assoc≃ A B C))) ∘
+--       invEq ⟦⅀⟧ ≡ Assoc-cont A B C`, via `⟦⅀Assoc⟧` + `uaβ` + (b).
+--   (d) `transp-⅀AssocD-pair` — the analogous fact for the whole `⅀AssocD`
+--       path (which is `Inj (⅀Assoc≃) ∙ cong (⅀ _) C'-eq`), built by composing
+--       (c) with a `⟦⅀⟧-natural-snd` step and an internal `adj-coh`-driven
+--       `c-restore` that recovers the canonical `snd` component.
+--   (e) `adj-coh` — adjunction coherence for an arbitrary equivalence,
+--       used inside (d) to relate `funExt⁻ C'-eq` transports back to `secEq`.
+--
+-- ## Opacity conventions (kept after `ff2c818 Speed up typechecking`)
+--
+-- Path-valued helpers are wrapped in `opaque` to seal cubical reductions.
+-- NEVER wrap an `isoToEquiv`- or equivalence-valued definition in `opaque`
+-- — its `.equiv-proof` projection is load-bearing for downstream computations
+-- (`uaβ`, `equivFun`, `invEq`, …). NEVER wrap a definition whose body must
+-- reduce inside a `subst (FreeOps K) …` argument (`⅀IdlD`, `⅀AssocD`) — those
+-- are kept transparent in `Universe.IRDerived`.
+-- ============================================================================
 module HoTTOperads.Free.HIT where
 
 open import Cubical.Foundations.Prelude
@@ -18,8 +65,8 @@ open import Cubical.Foundations.Transport using (substComposite)
 open import Cubical.Foundations.GroupoidLaws using (lCancel ; rUnit ; lUnit ; assoc ; congFunct ; symDistr)
 open import Cubical.Foundations.Path using (isProp→SquareP)
 open import Cubical.Foundations.Univalence using (ua ; uaβ ; uaInvEquiv ; pathToEquiv ; pathToEquivRefl ; ua-pathToEquiv ; pathToEquiv-ua ; uaCompEquiv ; EquivJ)
-open import Cubical.Data.Sigma using (_,_ ; fst ; snd ; ΣPathP)
-open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-snd)
+open import Cubical.Data.Sigma using (_,_ ; fst ; snd ; Σ ; ΣPathP)
+open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-snd ; Σ-cong-equiv-fst ; Σ-assoc-≃)
 open import Cubical.Data.Unit using (tt)
 
 open import HoTTOperads.Universe.Base
@@ -34,6 +81,14 @@ private
 module _ {𝒰 : Universe ℓc ℓe} where
   open Universe 𝒰
 
+  -- ============================================================================
+  -- §2  The free operad as a HIT
+  --
+  -- `FreeOps K A` is the type of K-labelled trees with leaves indexed by `El 𝜏`
+  -- and indexed branching by `⅀`-pairs, quotiented by the `set` truncation that
+  -- forces every fibre to be an h-set. The three constructors match the
+  -- presentation in FreeOperad.tex §9.
+  -- ============================================================================
   data FreeOps (K : Code → Type ℓk) : Code → Type (ℓ-max (ℓ-max ℓc ℓe) ℓk) where
     leaf : FreeOps K 𝜏
     node : (A : Code) (B : El A → Code)
@@ -41,9 +96,19 @@ module _ {𝒰 : Universe ℓc ℓe} where
          → FreeOps K (⅀ A B)
     set  : (A : Code) (x y : FreeOps K A) (p q : x ≡ y) → p ≡ q
 
+  -- ============================================================================
+  -- §3  Graft (the operadic composition)
+  --
+  -- `graft K A C t f` substitutes the subtrees `f : ∀ a, FreeOps K (C a)` at
+  -- each leaf of `t : FreeOps K A`. On `leaf` we take the unique input via
+  -- `⅀IdlD`; on a `node A B k ts` we recurse and then `subst` along
+  -- `⅀AssocD A B C` to bring the indices into the operadic form.
+  -- ============================================================================
   opaque
-    -- Transport a node along a cong-of-⅀A-path: distributes over the index.
-    -- By J on q. At q = refl, both sides reduce to `node A B₁ k ts` via substRefl.
+    -- Distribute `subst (FreeOps K) (cong (⅀ A) q)` over a `node`: the outer
+    -- subst splits as a `node` whose per-fibre subtrees are themselves substed
+    -- along the corresponding `funExt⁻ q a`. Proved by `J` on `q`: at `q = refl`
+    -- both sides reduce to `node A B₁ k ts` modulo `substRefl`.
     subst-cong-⅀-node : (K : Code → Type ℓk) (A : Code)
                         {B₁ B₂ : El A → Code} (q : B₁ ≡ B₂)
                         (k : K A) (ts : (a : El A) → FreeOps K (B₁ a))
@@ -77,17 +142,33 @@ module _ {𝒰 : Universe ℓc ℓe} where
         (λ k → graft K A C (p k) tss)
         (λ k → graft K A C (q k) tss) i j
 
-  -- Cubical index path: ⅀ A (C ∘ transport p) ≡ ⅀ A' C. At i = 1 the inner
-  -- transp is along a constant line starting from i1, hence the identity, so
-  -- the path lands at ⅀ A' C definitionally.
+  -- ============================================================================
+  -- §4  Substitution toolkit
+  --
+  -- Three lemmas for pushing a `subst (FreeOps K) _` across an outer `graft`:
+  --   * `⅀-subst-path p C` is the cubical index path along which the LHS-input
+  --     of `graft` reindexes.
+  --   * `graft-subst-fst`  pushes the subst over the first (tree) argument.
+  --   * `graft-subst-snd`  pushes it over the second (per-fibre) function.
+  -- All three are used in §8.
+  -- ============================================================================
+
+  -- The cubical index path along which the *first* argument of `graft` reindexes
+  -- when its tree is substed along `p : A ≡ A'`. Built by varying the outer code
+  -- along `p i` and the per-fibre code along a partial `El`-transport that is the
+  -- identity at `i = 1` (so the path lands at `⅀ A' C` definitionally).
   ⅀-subst-path : {A A' : Code} (p : A ≡ A') (C : El A' → Code)
                → ⅀ A (λ a → C (transport (cong El p) a)) ≡ ⅀ A' C
   ⅀-subst-path p C i = ⅀ (p i) (λ a → C (transp (λ j → El (p (i ∨ j))) i a))
 
-  -- Push a subst across the outer graft. Built as fromPathP of a direct cubical
-  -- filler: at each i, graft is applied to the partial-transport of t (so that
-  -- the first FreeOps argument lives in FreeOps K (p i)) with the per-fibre
-  -- function f reparameterised along the corresponding partial El-transport.
+  -- Push a `subst (FreeOps K) p` past the *first* argument of an outer `graft`.
+  -- The result lives in `FreeOps K (⅀ A' C)` on both sides; we move the subst
+  -- onto a `⅀-subst-path`-shaped reindexing of the inner `graft`. Proved by
+  -- exhibiting a direct cubical filler — at each `i`, `graft` is applied to the
+  -- partial-transport of `t` (so the first `FreeOps` argument lives in
+  -- `FreeOps K (p i)`) and the per-fibre function `f` is reparameterised along
+  -- the corresponding partial `El`-transport. `fromPathP` of the filler is the
+  -- desired equation.
   opaque
     graft-subst-fst : (K : Code → Type ℓk) {A A' : Code} (p : A ≡ A')
                       (C : El A' → Code) (t : FreeOps K A)
@@ -106,9 +187,12 @@ module _ {𝒰 : Universe ℓc ℓe} where
                          (transp (λ k → FreeOps K (p (i ∧ k))) (~ i) t)
                          (λ a → f (transp (λ j → El (p (i ∨ j))) i a))
 
-  -- Push subst-along-cong-⅀A across the outer graft into the per-fibre function.
-  -- The codomain family rebases from C to C' via q, with the per-fibre function f
-  -- substituted along funExt⁻ q a in the result.
+  -- Push `subst (FreeOps K) (cong (⅀ A) q)` past the *second* (per-fibre)
+  -- argument of an outer `graft`. The codomain family rebases from `C` to `C'`
+  -- along `q`, and each per-fibre subtree `f a` is independently substed along
+  -- the corresponding `funExt⁻ q a`. Proved by the dual filler to
+  -- `graft-subst-fst`: at each `i`, `graft` runs with the same tree `t` but the
+  -- codomain at `q i` and a partial `q`-transport on each `f a`.
   opaque
     graft-subst-snd : (K : Code → Type ℓk) (A : Code) {C C' : El A → Code}
                       (q : C ≡ C') (t : FreeOps K A)
@@ -122,10 +206,15 @@ module _ {𝒰 : Universe ℓc ℓe} where
                        (graft K A C' t (λ a → subst (FreeOps K) (funExt⁻ q a) (f a)))
         filler i = graft K A (q i) t (λ a → transp (λ k → FreeOps K (q (i ∧ k) a)) (~ i) (f a))
 
-  -- Transport along ⅀IdlD 𝒰 D coincides with the canonical inverse-Σ pre-image.
-  -- Proven by decomposing the ⅀IdlD path into its two factors and applying ⟦⅀Idl⟧
-  -- (relating ua of ⅀Idl≃ to cong El of Inj) and ⟦⅀⟧-natural-snd (computing the
-  -- transport along the second-argument cong via Σ-cong-equiv-snd).
+  -- Transport along `⅀IdlD 𝒰 D` (the path `D α ≡ ⅀ 𝜏 D` with `α = invEq ⟦𝜏⟧ tt`)
+  -- coincides with the canonical inverse-Σ pre-image `invEq (⟦⅀⟧ 𝜏 D) (α , b)`.
+  -- This is the leaf-case analog of `transp-⅀AssocD-pair` (§5): a once-and-for-all
+  -- characterisation of how the `⅀IdlD` path acts on a canonical input.
+  -- Proof: split `⅀IdlD = sym (⅀Idl 𝒰 (D α)) ∙ cong (⅀ 𝜏) const-X-D` via
+  -- `congFunct` + `substComposite`, then apply `⟦⅀Idl⟧` (relating `ua (⅀Idl≃)` to
+  -- `cong El (Inj …)`) on the first factor and `⟦⅀⟧-natural-snd` on the second.
+  -- The per-fibre transport at the `α`-fibre reduces to the identity because
+  -- `El 𝜏` is a proposition, so `retEq ⟦𝜏⟧ α ≡ refl`.
   opaque
    transp-⅀IdlD : (D : El 𝜏 → Code) (b : El (D (invEq ⟦𝜏⟧ tt)))
                → transport (cong El (⅀IdlD 𝒰 D)) b ≡ invEq (⟦⅀⟧ 𝜏 D) (invEq ⟦𝜏⟧ tt , b)
@@ -151,7 +240,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
       const-X-D : (λ (_ : El 𝜏) → D α) ≡ D
       const-X-D = funExt (λ e → cong D (retEq ⟦𝜏⟧ e))
 
-      -- transport along the inverse of ⅀Idl≃ is invEq applied via invEq-⅀Idl.
+      -- First factor: transport along `sym (⅀Idl 𝒰 (D α))` is `invEq (⅀Idl≃ (D α))`
+      -- (via `⟦⅀Idl⟧` + `uaInvEquiv` + `uaβ`), which by `invEq-⅀Idl` agrees with
+      -- the canonical `invEq (⟦⅀⟧ 𝜏 (const (D α))) (α , _)` form.
       half-1 : transport (cong El (sym (⅀Idl 𝒰 (D α)))) b
              ≡ invEq (⟦⅀⟧ 𝜏 (λ _ → D α)) (α , b)
       half-1 =
@@ -166,9 +257,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
           invEq (⟦⅀⟧ 𝜏 (λ _ → D α)) (α , b)
         ∎
 
-      -- transport along cong (⅀ 𝜏) const-X-D factors via ⟦⅀⟧-natural-snd. At the
-      -- α-fibre, the per-fibre transport reduces to the identity because El 𝜏 is
-      -- a prop, hence retEq ⟦𝜏⟧ α ≡ refl, hence funExt⁻ const-X-D α ≡ refl.
+      -- Second factor: transport along `cong (⅀ 𝜏) const-X-D` factors via
+      -- `⟦⅀⟧-natural-snd`. At the `α`-fibre, the per-fibre transport reduces to
+      -- the identity because `El 𝜏` is a proposition — hence `retEq ⟦𝜏⟧ α ≡ refl`,
+      -- which makes `funExt⁻ const-X-D α ≡ refl` and the corresponding
+      -- `pathToEquiv (cong El _) ≡ idEquiv`.
       retEq-𝜏-refl : retEq ⟦𝜏⟧ α ≡ refl
       retEq-𝜏-refl = isProp→isSet (isPropEl𝜏 𝒰) α α (retEq ⟦𝜏⟧ α) refl
 
@@ -205,13 +298,16 @@ module _ {𝒰 : Universe ℓc ℓe} where
           invEq (⟦⅀⟧ 𝜏 D) (α , b)
         ∎
 
-  -- Transport along ⅀-subst-path computes via the canonical Σ-rebase: send
-  -- (a, c) under ⟦⅀⟧ to (transport (cong El p) a, c) and back via invEq ⟦⅀⟧.
-  -- Provable by J on p: at p = refl, ⅀-subst-path refl C reduces (definitionally)
-  -- to cong (⅀ A) (B-path) where B-path varies the second arg via transp on a
-  -- constant family; the equation then follows from ⟦⅀⟧-natural-snd plus a
-  -- ΣPathP rewrite swapping the per-fibre transport (Σ-snd form) for the first-
-  -- component transport-refl form (Σ-fst form).
+  -- Transport along `⅀-subst-path p C` computes via the canonical Σ-rebase:
+  -- given `y : El (⅀ A (C ∘ transport p))`, send `(a , c) = equivFun ⟦⅀⟧ y` under
+  -- the `Σ` shuffle to `(transport p a , c)` and back via `invEq ⟦⅀⟧` at the
+  -- target. Used in `graft-assoc`'s `eq-leaf` chain alongside `⅀AssocD` reductions.
+  --
+  -- Proof: `J` on `p`. At `p = refl`, `⅀-subst-path refl C` reduces definitionally
+  -- to `cong (⅀ A) B-path` where `B-path` varies the second arg via a `transp`
+  -- on a constant family; the equation then follows from `⟦⅀⟧-natural-snd`
+  -- plus a `ΣPathP` that swaps the per-fibre transport (Σ-snd form) for the
+  -- first-component `transport-refl` form (Σ-fst form).
   transp-⅀-subst-path : {A A' : Code} (p : A ≡ A') (C : El A' → Code)
                         (y : El (⅀ A (λ a → C (transport (cong El p) a))))
                       → transport (cong El (⅀-subst-path p C)) y
@@ -255,8 +351,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
           pair-eq = ΣPathP ( sym (transportRefl a)
                           , λ i → transport-filler (cong El (funExt⁻ B-path a)) c (~ i))
 
-  -- Step-0 sanity probe: ⅀Assoc-C' A B C unfolds definitionally to the η-form on Σ.
-  -- Used by eq-leaf's funExt-q-decomp.
+  -- Sanity probe: `⅀Assoc-C' A B C` unfolds definitionally to its `η`-form on Σ,
+  -- i.e. `λ ab → C (fst (⟦⅀⟧ ab)) (snd (⟦⅀⟧ ab))`. We record this with `refl` so
+  -- downstream `cong`s can rewrite under it without needing to unfold `⅀Assoc-C'`
+  -- by hand. Used by `eq-leaf`'s `funExt-q-decomp`.
   private
     Assoc-C'-uncurry-refl : (A : Code) (B : El A → Code) (C : (a : El A) → El (B a) → Code)
                           → ⅀Assoc-C' A B C
@@ -264,12 +362,209 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                        (snd (equivFun (⟦⅀⟧ A B) ab)))
     Assoc-C'-uncurry-refl _ _ _ = refl
 
-  -- Left identity of graft: grafting at a leaf produces the right-hand subtree,
-  -- modulo the canonical path ⅀ 𝜏 (λ _ → A) ≡ A.
+  -- ============================================================================
+  -- §5  Reduction toolkit
   --
-  -- For the constant codomain X = λ _ → A, the helper ⅀IdlD 𝒰 X used inside
-  -- `graft K 𝜏 (λ _ → A) leaf (λ _ → t)` reduces definitionally to
-  -- `sym (Inj (⅀Idl≃ A)) ∙ refl`, so composing with `Inj (⅀Idl≃ A)` cancels.
+  -- The associativity proof (`graft-assoc`) and to a lesser extent `graft-idr`
+  -- repeatedly need to compute *transports along the universe paths*
+  -- `Inj (⅀Assoc≃ A B C)` and `⅀AssocD 𝒰 A B C` applied to a *canonical
+  -- pair* `invEq (⟦⅀⟧ A …) (a , z)`. Every such site follows the same
+  -- five-step recipe; the toolkit below extracts it once. Each subsequent
+  -- call site shrinks from ~30 lines of substComposite/cong bookkeeping to
+  -- a 1-line specialisation.
+  --
+  -- Recipe (each step a separate opaque lemma below):
+  --   (a) `Assoc-cont A B C p` — the explicit Σ-shuffle that
+  --       `equivFun (⅀Assoc≃ A B C)` unfolds to (this is `compEquiv`
+  --       reducing definitionally on Σ).
+  --   (b) `Assoc-cont-at-pair` — `equivFun (⅀Assoc≃ A B C) (invEq ⟦⅀⟧ p) ≡
+  --       Assoc-cont A B C p`, by `cong (Assoc-cont _) (secEq …)`.
+  --   (c) `step-Assoc-on-pair` — `transport (cong El (Inj (⅀Assoc≃ A B C))) ∘
+  --       invEq ⟦⅀⟧ ≡ Assoc-cont A B C`, via `⟦⅀Assoc⟧ + uaβ`.
+  --   (d) `transp-⅀AssocD-pair` — the analogous fact for the whole
+  --       `⅀AssocD 𝒰 A B C` path (which is `Inj (⅀Assoc≃) ∙ cong (⅀ _) C'-eq`),
+  --       built by composing (c) with a `⟦⅀⟧-natural-snd` step.
+  --   (e) `adj-coh` — adjunction coherence for an arbitrary equivalence,
+  --       used inside (d) to relate the `funExt⁻ C'-eq` transport to a
+  --       `secEq`-driven one (this is what `c-of-eq` in the original
+  --       node case did at three different abstraction levels).
+  -- ============================================================================
+
+  -- (e) Adjunction coherence: `invEq` of `secEq` equals `retEq` of `invEq`.
+  --     A general groupoid fact derived from `EquivJ` at `idEquiv`.
+  --     Not opaque (equivalence-induction stays accessible to consumers).
+  adj-coh : ∀ {ℓ} {X Y : Type ℓ} (e : X ≃ Y) (y : Y)
+          → cong (invEq e) (secEq e y) ≡ retEq e (invEq e y)
+  adj-coh {Y = Y} e =
+    EquivJ (λ _ e' → (y : Y) → cong (invEq e') (secEq e' y) ≡ retEq e' (invEq e' y))
+           (λ _ → refl) e
+
+  -- (a) The explicit Σ-shuffle behind `equivFun (⅀Assoc≃ A B C)`.
+  --     `⅀Assoc≃ A B C` is defined in Universe/Base as a five-fold `compEquiv`,
+  --     so `equivFun (⅀Assoc≃ A B C) y` reduces definitionally to
+  --     `Assoc-cont A B C (equivFun (⟦⅀⟧ A _) y)`. Naming the shuffle once
+  --     means downstream sites never have to inline the Σ bookkeeping.
+  --     Not opaque (it's a plain term, used as a *target* of normalisation).
+  Assoc-cont : (A : Code) (B : El A → Code)
+               (C : (a : El A) → El (B a) → Code)
+               (p : Σ (El A) (λ a → El (⅀ (B a) (C a))))
+             → El (⅀ (⅀ A B) (⅀Assoc-C' A B C))
+  Assoc-cont A B C p =
+    invEq (⟦⅀⟧ (⅀ A B) (⅀Assoc-C' A B C))
+          (invEq (Σ-cong-equiv-fst {B = λ ab → El (C (fst ab) (snd ab))} (⟦⅀⟧ A B))
+                 (invEq Σ-assoc-≃
+                        (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B a) (C a))) p)))
+
+  opaque
+    -- (b) Apply `⅀Assoc≃` to a canonical pair `invEq ⟦⅀⟧ p`. The only
+    --     propositional step is `secEq`; the rest is definitional.
+    Assoc-cont-at-pair
+      : (A : Code) (B : El A → Code) (C : (a : El A) → El (B a) → Code)
+        (p : Σ (El A) (λ a → El (⅀ (B a) (C a))))
+      → equivFun (⅀Assoc≃ A B C)
+                 (invEq (⟦⅀⟧ A (λ a → ⅀ (B a) (C a))) p)
+      ≡ Assoc-cont A B C p
+    Assoc-cont-at-pair A B C p =
+      cong (Assoc-cont A B C) (secEq (⟦⅀⟧ A (λ a → ⅀ (B a) (C a))) p)
+
+  opaque
+    -- (c) Push `transport (cong El (Inj (⅀Assoc≃ …)))` through a canonical
+    --     pair input. Combines `⟦⅀Assoc⟧` (`Inj`-image of `⅀Assoc≃` equals
+    --     `ua` of `⅀Assoc≃`) with `uaβ` and `Assoc-cont-at-pair`.
+    step-Assoc-on-pair
+      : (A : Code) (B : El A → Code) (C : (a : El A) → El (B a) → Code)
+        (p : Σ (El A) (λ a → El (⅀ (B a) (C a))))
+      → transport (cong El (Inj (⅀Assoc≃ A B C)))
+                  (invEq (⟦⅀⟧ A (λ a → ⅀ (B a) (C a))) p)
+      ≡ Assoc-cont A B C p
+    step-Assoc-on-pair A B C p =
+        cong (λ q → transport q (invEq (⟦⅀⟧ A (λ a → ⅀ (B a) (C a))) p))
+             (sym (⟦⅀Assoc⟧ A B C))
+      ∙ uaβ (⅀Assoc≃ A B C) (invEq (⟦⅀⟧ A (λ a → ⅀ (B a) (C a))) p)
+      ∙ Assoc-cont-at-pair A B C p
+
+  opaque
+    -- (d) Push `transport (cong El (⅀AssocD 𝒰 A B C))` through a canonical
+    --     pair input. `⅀AssocD A B C` is `Inj (⅀Assoc≃ A B C') ∙ cong (⅀ (⅀ A B)) C'-eq`
+    --     where `C' a b = C (invEq (⟦⅀⟧ A B) (a , b))` and
+    --     `C'-eq : ⅀Assoc-C' A B C' ≡ C` is the `retEq`-driven funExt.
+    --     Two sites in `graft-assoc`'s node case
+    --     (`transp-⅀AssocD-LHS-on-pair`, `transp-⅀AssocD-RHS-on-pair` in
+    --     pre-refactor terminology) collapse to one-liner specialisations.
+    transp-⅀AssocD-pair
+      : (A : Code) (B : El A → Code) (C : El (⅀ A B) → Code)
+        (a : El A)
+        (z : El (⅀ (B a) (λ b → C (invEq (⟦⅀⟧ A B) (a , b)))))
+      → transport (cong El (⅀AssocD 𝒰 A B C))
+                  (invEq (⟦⅀⟧ A (λ a' → ⅀ (B a') (λ b → C (invEq (⟦⅀⟧ A B) (a' , b)))))
+                         (a , z))
+      ≡ invEq (⟦⅀⟧ (⅀ A B) C)
+              ( invEq (⟦⅀⟧ A B) (a , fst (equivFun (⟦⅀⟧ (B a) (λ b → C (invEq (⟦⅀⟧ A B) (a , b)))) z))
+              , snd (equivFun (⟦⅀⟧ (B a) (λ b → C (invEq (⟦⅀⟧ A B) (a , b)))) z))
+    transp-⅀AssocD-pair A B C a z =
+        cong (λ q → transport q input)
+             (congFunct El (Inj (⅀Assoc≃ A B C')) (cong (⅀ (⅀ A B)) C'-eq))
+      ∙ substComposite (λ X → X)
+                       (cong El (Inj (⅀Assoc≃ A B C')))
+                       (cong El (cong (⅀ (⅀ A B)) C'-eq))
+                       input
+      ∙ cong transp-C'-eq (step-Assoc-on-pair A B C' (a , z))
+      ∙ transp-C'-eq-canonical
+      ∙ cong (λ w → invEq (⟦⅀⟧ (⅀ A B) C) (paired-ab , w))
+             (sym c-restore)
+      where
+        -- The inner family used by `⅀AssocD`: rebases `C` from `El (⅀ A B)`
+        -- to `(a : El A) → El (B a)` via the canonical `invEq` pre-image.
+        C' : (a : El A) → El (B a) → Code
+        C' a' b = C (invEq (⟦⅀⟧ A B) (a' , b))
+
+        -- The codomain-correction path used by `⅀AssocD`: at every `x : El (⅀ A B)`
+        -- the post-shuffle codomain `⅀Assoc-C' A B C'` evaluates by `retEq` to `C`.
+        C'-eq : ⅀Assoc-C' A B C' ≡ C
+        C'-eq = funExt (λ x → cong C (retEq (⟦⅀⟧ A B) x))
+
+        -- The transport along `cong (⅀ (⅀ A B)) C'-eq` (the second leg of
+        -- `⅀AssocD`). Named so the proof body reads as a single chain of `cong`s.
+        transp-C'-eq : El (⅀ (⅀ A B) (⅀Assoc-C' A B C')) → El (⅀ (⅀ A B) C)
+        transp-C'-eq = transport (cong (λ B'' → El (⅀ (⅀ A B) B'')) C'-eq)
+
+        input : El (⅀ A (λ a' → ⅀ (B a') (λ b → C (invEq (⟦⅀⟧ A B) (a' , b)))))
+        input = invEq (⟦⅀⟧ A (λ a' → ⅀ (B a') (λ b → C (invEq (⟦⅀⟧ A B) (a' , b))))) (a , z)
+
+        b-of : El (B a)
+        b-of = fst (equivFun (⟦⅀⟧ (B a) (λ b → C (invEq (⟦⅀⟧ A B) (a , b)))) z)
+
+        w-of : El (C (invEq (⟦⅀⟧ A B) (a , b-of)))
+        w-of = snd (equivFun (⟦⅀⟧ (B a) (λ b → C (invEq (⟦⅀⟧ A B) (a , b)))) z)
+
+        paired-ab : El (⅀ A B)
+        paired-ab = invEq (⟦⅀⟧ A B) (a , b-of)
+
+        -- The `subst`-shifted second component arising inside `Assoc-cont A B C' (a , z)`
+        -- after the inverse-of-Σ-cong-equiv-fst step.
+        substed-w : El (⅀Assoc-C' A B C' paired-ab)
+        substed-w = subst (λ ab → El (C' (fst ab) (snd ab)))
+                          (sym (secEq (⟦⅀⟧ A B) (a , b-of))) w-of
+
+        -- Step (e), local form: transport along the `funExt⁻ C'-eq`-image of
+        -- `paired-ab` recovers `w-of` from `substed-w`. The composed path
+        --   cong (λ ab → El (C' …)) (sym (secEq ⟦⅀⟧ (a , b-of)))
+        --   ∙ cong El (funExt⁻ C'-eq paired-ab)
+        -- collapses to `refl` by `adj-coh` (its two factors are exact inverses
+        -- of one another modulo `cong (cong _) …`).
+        opaque
+          c-restore : w-of ≡ transport (cong El (funExt⁻ C'-eq paired-ab)) substed-w
+          c-restore =
+              sym (transportRefl w-of)
+            ∙ cong (λ q → transport q w-of)
+                   (sym (lCancel (cong (λ ab → El (C' (fst ab) (snd ab)))
+                                        (secEq (⟦⅀⟧ A B) (a , b-of)))))
+            ∙ cong (λ q → transport (cong (λ ab → El (C' (fst ab) (snd ab)))
+                                            (sym (secEq (⟦⅀⟧ A B) (a , b-of))) ∙ q)
+                                     w-of)
+                   (sym key-eq-local)
+            ∙ substComposite (λ X → X)
+                             (cong (λ ab → El (C' (fst ab) (snd ab)))
+                                   (sym (secEq (⟦⅀⟧ A B) (a , b-of))))
+                             (cong El (funExt⁻ C'-eq paired-ab))
+                             w-of
+            where
+              -- `funExt⁻ C'-eq paired-ab = cong C (retEq ⟦⅀⟧ paired-ab)`
+              -- which by `adj-coh` agrees with `cong (λ ab → C' (fst ab) (snd ab))`
+              -- of `secEq ⟦⅀⟧ (a , b-of)`.
+              key-eq-local : cong El (funExt⁻ C'-eq paired-ab)
+                           ≡ cong (λ ab → El (C' (fst ab) (snd ab)))
+                                  (secEq (⟦⅀⟧ A B) (a , b-of))
+              key-eq-local = cong (cong (λ x → El (C x)))
+                                  (sym (adj-coh (⟦⅀⟧ A B) (a , b-of)))
+
+        -- Transport-along-`C'-eq` on the explicit `Assoc-cont` form factors via
+        -- `⟦⅀⟧-natural-snd` (second-argument naturality of `⟦⅀⟧`) plus a `secEq`
+        -- cancellation that lands us back in the canonical Σ-pair shape.
+        opaque
+          transp-C'-eq-canonical
+            : transp-C'-eq (Assoc-cont A B C' (a , z))
+            ≡ invEq (⟦⅀⟧ (⅀ A B) C)
+                    ( paired-ab
+                    , transport (cong El (funExt⁻ C'-eq paired-ab)) substed-w)
+          transp-C'-eq-canonical =
+              cong (λ e → equivFun e (Assoc-cont A B C' (a , z)))
+                   (⟦⅀⟧-natural-snd 𝒰 (⅀ A B) C'-eq)
+            ∙ cong (λ p → invEq (⟦⅀⟧ (⅀ A B) C)
+                                (fst p ,
+                                 transport (cong El (funExt⁻ C'-eq (fst p))) (snd p)))
+                   (secEq (⟦⅀⟧ (⅀ A B) (⅀Assoc-C' A B C'))
+                          (paired-ab , substed-w))
+
+  -- ============================================================================
+  -- §6  Left identity: graft-idl
+  --
+  -- Grafting at a `leaf` produces the right-hand subtree, modulo the canonical
+  -- path `⅀ 𝜏 (λ _ → A) ≡ A`. For the constant codomain `X = λ _ → A`, the
+  -- helper `⅀IdlD 𝒰 X` used inside `graft K 𝜏 (λ _ → A) leaf (λ _ → t)`
+  -- reduces definitionally to `sym (Inj (⅀Idl≃ A)) ∙ refl`, so composing with
+  -- `Inj (⅀Idl≃ A)` cancels. Following FreeOperad.tex §9 line 280 onwards.
+  -- ============================================================================
   graft-idl : (K : Code → Type ℓk) (A : Code) (t : FreeOps K A)
             → PathP (λ i → FreeOps K (Inj (⅀Idl≃ A) i))
                     (graft K 𝜏 (λ _ → A) leaf (λ _ → t)) t
@@ -287,55 +582,76 @@ module _ {𝒰 : Universe ℓc ℓe} where
            ∙ cong (λ p → subst (FreeOps K) p t) reduce
            ∙ substRefl {B = FreeOps K} t
 
-  -- Right identity of graft: grafting with leaves at every input is identity,
-  -- modulo the canonical path ⅀ A (λ _ → 𝜏) ≡ A.
+  -- ============================================================================
+  -- §7  Right identity: graft-idr
+  --
+  -- Grafting with leaves at every input is the identity, modulo the canonical
+  -- path `⅀ A (λ _ → 𝜏) ≡ A`. Three cases:
+  --   * Leaf  (A = 𝜏): both `⅀Idl≃ 𝜏` and `⅀Idr≃ 𝜏` are equivalences between
+  --     propositional types, hence propositionally equal; the loop reduces.
+  --   * Node  (A = ⅀ A' B'): combine the per-fibre IH via `cong (⅀ A')` of a
+  --     funExt path, then transfer across `Code` via an `InjSec`-driven bridge.
+  --   * Set:   fill via `isProp→SquareP` (the goal is a prop).
+  -- ============================================================================
   graft-idr : (K : Code → Type ℓk) (A : Code) (t : FreeOps K A)
             → PathP (λ i → FreeOps K (Inj (⅀Idr≃ A) i))
                     (graft K A (λ _ → 𝜏) t (λ _ → leaf)) t
-  -- Leaf case (A = 𝜏): both ⅀Idl≃ 𝜏 and ⅀Idr≃ 𝜏 are equivalences between
-  -- propositional types, hence propositionally equal. The loop they form
-  -- in Code reduces to refl.
   graft-idr K _ leaf = toPathP eq
     where
       opaque
+        -- `⅀Idl≃ 𝜏` and `⅀Idr≃ 𝜏` are equivalences between the propositional
+        -- types `El (⅀ 𝜏 (λ _ → 𝜏))` and `El 𝜏`, hence propositionally equal.
         idl≡idr : ⅀Idl≃ 𝜏 ≡ ⅀Idr≃ 𝜏
         idl≡idr = propEquivEq (isPropEl-⅀𝜏𝜏 𝒰) (isPropEl𝜏 𝒰) (⅀Idl≃ 𝜏) (⅀Idr≃ 𝜏)
 
+        -- The composite `sym (Inj ⅀Idl≃) ∙ Inj ⅀Idr≃` is the `Inj`-image of a loop
+        -- between two equal equivalences, hence is `refl` after rewriting along
+        -- `idl≡idr` and applying `lCancel`.
         loop-cancels : sym (Inj (⅀Idl≃ 𝜏)) ∙ Inj (⅀Idr≃ 𝜏) ≡ refl
         loop-cancels = cong (λ e → sym (Inj (⅀Idl≃ 𝜏)) ∙ Inj e) (sym idl≡idr)
                      ∙ lCancel (Inj (⅀Idl≃ 𝜏))
 
+        -- `⅀IdlD 𝒰 (λ _ → 𝜏)` unfolds to `sym (Inj (⅀Idl≃ 𝜏)) ∙ refl`, so the
+        -- composite with `Inj (⅀Idr≃ 𝜏)` collapses to the loop above.
         reduce : ⅀IdlD 𝒰 (λ _ → 𝜏) ∙ Inj (⅀Idr≃ 𝜏) ≡ refl
         reduce = cong (_∙ Inj (⅀Idr≃ 𝜏)) (sym (rUnit (sym (Inj (⅀Idl≃ 𝜏)))))
                ∙ loop-cancels
 
+        -- Transport along `Inj (⅀Idr≃ 𝜏)` of the substed leaf equals `leaf` once
+        -- the composite path reduces (via `substComposite` + `reduce` + `substRefl`).
         eq : transport (λ i → FreeOps K (Inj (⅀Idr≃ 𝜏) i))
                        (graft K 𝜏 (λ _ → 𝜏) leaf (λ _ → leaf)) ≡ leaf
         eq = sym (substComposite (FreeOps K) (⅀IdlD 𝒰 (λ _ → 𝜏)) (Inj (⅀Idr≃ 𝜏)) leaf)
            ∙ cong (λ p → subst (FreeOps K) p leaf) reduce
            ∙ substRefl {B = FreeOps K} leaf
-  -- Node case: combines the IH per fibre with a structural cong-of-node path,
-  -- then transfers across Code via the InjSec-driven bridge.
   graft-idr K _ (node A B k ts) = toPathP eq
     where
-      -- Per-fibre path: Inj (⅀Idr≃ (B a)) : ⅀ (B a) (λ _ → 𝜏) ≡ B a.
+      -- Per-fibre Code-level path: `⅀ (B a) (λ _ → 𝜏) ≡ B a`, exhibited as the
+      -- `Inj`-image of the per-fibre identity equivalence `⅀Idr≃ (B a)`.
       p : (a : El A) → ⅀ (B a) (λ _ → 𝜏) ≡ B a
       p a = Inj (⅀Idr≃ (B a))
 
-      -- The intermediate node value before subst-by-⅀AssocD.
+      -- The intermediate node value: the LHS of `graft-idr` after one `graft`
+      -- step has unfolded `(node A B k ts)` and substed along `⅀AssocD A B (const 𝜏)`,
+      -- before the outer `Inj (⅀Idr≃ (⅀ A B))`-transport closes the gap.
       inner-node : FreeOps K (⅀ A (λ a → ⅀ (B a) (λ _ → 𝜏)))
       inner-node = node A (λ a → ⅀ (B a) (λ _ → 𝜏)) k
                         (λ a → graft K (B a) (λ _ → 𝜏) (ts a) (λ _ → leaf))
 
-      -- node-path: a structural PathP built by varying the B-arg and ts-arg of
-      -- node along i, using the per-fibre IH.
+      -- Structural heterogeneous path from `inner-node` to `node A B k ts`,
+      -- varying the per-fibre codomain along `p` and the per-fibre subtree along
+      -- the IH `graft-idr K (B a) (ts a)`.
       node-path : PathP (λ i → FreeOps K (⅀ A (λ a → p a i)))
                         inner-node (node A B k ts)
       node-path i = node A (λ a → p a i) k (λ a → graft-idr K (B a) (ts a) i)
 
       opaque
-        -- Bridge: the two Code-level paths agree. Reduce via InjSec to El-level
-        -- equivalence equality, then unify both sides via Σ-decomposition.
+        -- Code-level bridge: the path used by the outer `Inj (⅀Idr≃ (⅀ A B))`
+        -- transport agrees with the `cong (⅀ A) (funExt p)` path that drives
+        -- `node-path`. Strategy: the standard `InjSec` sandwich
+        --     `p = sym (InjSec p) ∙ cong Inj (equivs-agree) ∙ InjSec p'`
+        -- reduces the goal to an equality of equivalences, which we then
+        -- discharge pointwise.
         bridge : ⅀AssocD 𝒰 A B (λ _ → 𝜏) ∙ Inj (⅀Idr≃ (⅀ A B))
                ≡ cong (⅀ A) (funExt p)
         bridge =
@@ -343,7 +659,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong Inj equivs-agree
           ∙ InjSec 𝒰 (cong (⅀ A) (funExt p))
           where
-            -- LHS-of-bridge cong-El simplification → compEquiv ⅀Assoc≃ ⅀Idr≃.
+            -- LHS-of-bridge under `cong El` simplifies to `ua (⅀Assoc≃ ⨟ ⅀Idr≃)`.
+            -- Path-composition + `⟦⅀Assoc⟧`/`⟦⅀Idr⟧` (which equate `cong El (Inj e)`
+            -- with `ua e`) yields `ua (compEquiv …)` via `uaCompEquiv`.
             cong-El-LHS : cong El (⅀AssocD 𝒰 A B (λ _ → 𝜏) ∙ Inj (⅀Idr≃ (⅀ A B)))
                         ≡ ua (compEquiv (⅀Assoc≃ A B (λ _ _ → 𝜏)) (⅀Idr≃ (⅀ A B)))
             cong-El-LHS =
@@ -357,8 +675,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                       (sym (⟦⅀Idr⟧ (⅀ A B)))
               ∙ sym (uaCompEquiv (⅀Assoc≃ A B (λ _ _ → 𝜏)) (⅀Idr≃ (⅀ A B)))
 
-            -- RHS-of-bridge cong-El simplification → Σ-cong-equiv-snd form via ⟦⅀⟧-naturality.
-            -- For p a = Inj (⅀Idr≃ (B a)): pathToEquiv (cong El (p a)) = ⅀Idr≃ (B a).
+            -- RHS-of-bridge under `cong El` simplifies via `⟦⅀⟧-natural-snd` to
+            -- a `Σ-cong-equiv-snd`-shaped composite. For `p a = Inj (⅀Idr≃ (B a))`
+            -- the per-fibre `pathToEquiv (cong El (p a))` collapses to `⅀Idr≃ (B a)`
+            -- (by `⟦⅀Idr⟧` + `pathToEquiv-ua`).
             cong-El-RHS-equiv : pathToEquiv (cong El (cong (⅀ A) (funExt p)))
                               ≡ compEquiv (⟦⅀⟧ A (λ a → ⅀ (B a) (λ _ → 𝜏)))
                                           (compEquiv (Σ-cong-equiv-snd {A = El A}
@@ -384,12 +704,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                → funExt⁻ (funExt h) a ≡ h a
                 funExt⁻-funExt _ _ = refl
 
-            -- Combine: LHS-equiv ≡ RHS-equiv. Use that compEquiv ⅀Assoc≃ ⅀Idr≃ equals
-            -- the Σ-cong-equiv-snd composite, by equivEq + funExt.
-            -- Both compEquiv ⅀Assoc≃ ⅀Idr≃ and the Σ-cong-equiv-snd composite send
-            -- x ↦ invEq (⟦⅀⟧ A B) (a, b) where (a, σ) = ⟦⅀⟧ x and (b, _) = ⟦⅀⟧ σ.
-            -- The only non-definitional step is the secEq invocation cancelling
-            -- the inner `equivFun ⟦⅀⟧ ∘ invEq ⟦⅀⟧` on the LHS chain.
+            -- Bridge the two equivalence forms: `compEquiv ⅀Assoc≃ ⅀Idr≃` agrees
+            -- with the `Σ-cong-equiv-snd`-based composite. Both send `x` to
+            -- `invEq (⟦⅀⟧ A B) (a , b)` where `(a , σ) = ⟦⅀⟧ x` and `(b , _) = ⟦⅀⟧ σ`;
+            -- after `equivEq + funExt`, the only non-definitional step is the
+            -- single `secEq` invocation cancelling `equivFun ⟦⅀⟧ ∘ invEq ⟦⅀⟧` inside.
             composite-as-Σ : compEquiv (⅀Assoc≃ A B (λ _ _ → 𝜏)) (⅀Idr≃ (⅀ A B))
                            ≡ compEquiv (⟦⅀⟧ A (λ a → ⅀ (B a) (λ _ → 𝜏)))
                                        (compEquiv (Σ-cong-equiv-snd {A = El A}
@@ -422,8 +741,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                   inner-node)
            ∙ cong (λ pp → subst (FreeOps K) pp inner-node) bridge
            ∙ node-path-fp
-  -- Set case: the goal type is a PathP into the set FreeOps K A, hence a
-  -- proposition. Fill the resulting square via isProp→SquareP.
+  -- Set case: the goal is a `PathP` into the set `FreeOps K A`, which is a
+  -- proposition by `isOfHLevelPathP' 1 (set A)`. The square is filled by
+  -- recursively applying `graft-idr K A` to the four faces (`x`, `y`, `p kk`,
+  -- `q kk`) of the input `set`-cell, then closing the result with `isProp→SquareP`.
   graft-idr K A (set _ x y p q i j) =
     isProp→SquareP
       {B = λ i' j' → PathP (λ i'' → FreeOps K (Inj (⅀Idr≃ A) i''))
@@ -436,9 +757,19 @@ module _ {𝒰 : Universe ℓc ℓe} where
       (λ kk → graft-idr K A (q kk))
       i j
 
-  -- Associativity of graft. Induction on t. Both leaf and node cases reduce
-  -- (after toPathP) to a set-level path between substed-graft expressions;
-  -- in each, a Code-level bridge plays the same role as in graft-idr.
+  -- ============================================================================
+  -- §8  Associativity: graft-assoc
+  --
+  -- The heart of the file. Induction on the first tree `t`. Both `leaf` and
+  -- `node` cases reduce (after `toPathP`) to a path between substed `graft`
+  -- expressions; in each, a Code-level `bridge` aligns the LHS and RHS index
+  -- paths so that a structural `subst`/`graft-subst-fst`/`graft-subst-snd`
+  -- chain composes the per-fibre IH into the final equality.
+  --
+  -- Both cases follow the five-step Recipe outlined in §1 / §5: the toolkit
+  -- lemma `transp-⅀AssocD-pair` is applied (specialised) at every site where a
+  -- transport along `⅀AssocD A B C` is computed on a canonical Σ-pair input.
+  -- ============================================================================
   graft-assoc : (K : Code → Type ℓk) (A : Code) (B : El A → Code)
                 (C : (a : El A) → El (B a) → Code)
                 (t : FreeOps K A) (ts : (a : El A) → FreeOps K (B a))
@@ -450,25 +781,37 @@ module _ {𝒰 : Universe ℓc ℓe} where
                             (graft K A B t ts)
                             (λ ab → tss (fst (equivFun (⟦⅀⟧ A B) ab))
                                         (snd (equivFun (⟦⅀⟧ A B) ab))))
-  -- Leaf case (A = 𝜏): the LHS reduces via graft's leaf clause to a subst
-  -- applied to graft K (B α) (C α) (ts α) (tss α). The RHS contains
-  -- graft K (⅀ 𝜏 B) ... (subst (⅀IdlD 𝒰 B) (ts α)) (...), where the third
-  -- argument is opaque (subst-of-arbitrary-FreeOps doesn't reduce on HIT
-  -- constructors). Discharging this constructively requires a nested
-  -- induction on `ts α` to compute the RHS graft for each constructor case,
-  -- mirroring the toPathP + InjSec + ⟦⅀⟧-natural-snd + Σ-decomp recipe used
-  -- in graft-idr's node case.
+  -- Leaf case (A = 𝜏). After `toPathP`, the goal `LHS ≡ RHS` reduces to a
+  -- propositional equality between two heavily substed `graft` expressions:
+  --   LHS = `transport (Inj (⅀Assoc≃ 𝜏 B C)) (graft 𝜏 D₀ leaf …)` where each
+  --       inner subtree is itself a `graft (B a) (C a) (ts a) (tss a)`.
+  --   RHS = `graft (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C) (graft 𝜏 B leaf ts) (tss ∘ ⟦⅀⟧)`,
+  --       where the inner LHS-graft of RHS contains `subst (⅀IdlD 𝒰 B) (ts α)`
+  --       which does *not* reduce on arbitrary HIT-constructor inputs.
+  -- Strategy: build a Code-level `bridge` aligning the two index paths via the
+  -- standard `InjSec` sandwich, then chain `substComposite`,
+  -- `graft-subst-snd`/`graft-subst-fst`, and a pointwise equality `tss-eq` that
+  -- transports the per-fibre subtrees `tss α b` across the bridge.
   graft-assoc K _ B C leaf ts tss = toPathP eq-leaf
     where
+      -- The canonical element of `El 𝜏`, used as the index of the single
+      -- "leaf-fibre" in `⅀ 𝜏 _`.
       α : El 𝜏
       α = invEq ⟦𝜏⟧ tt
 
+      -- The LHS top-level codomain family: at each `a : El 𝜏`, the post-`graft`
+      -- index is `⅀ (B a) (C a)`. Only `a = α` matters (since `El 𝜏` is a prop).
       D₀ : El 𝜏 → Code
       D₀ a = ⅀ (B a) (C a)
 
+      -- Transport `El (B α) → El (⅀ 𝜏 B)` along the `⅀IdlD 𝒰 B` path. This is
+      -- the operation that `graft K 𝜏 B leaf ts` evaluates `ts α` through.
       transp-B : El (B α) → El (⅀ 𝜏 B)
       transp-B = transport (cong El (⅀IdlD 𝒰 B))
 
+      -- `equivFun ⟦⅀⟧` on a `transp-B b` recovers the canonical pair `(α , b)`:
+      -- `transp-⅀IdlD` rewrites `transp-B b` to `invEq ⟦⅀⟧ (α , b)`, then `secEq`
+      -- cancels the inner `equivFun ∘ invEq`.
       pair-eq : (b : El (B α)) → equivFun (⟦⅀⟧ 𝜏 B) (transp-B b) ≡ (α , b)
       pair-eq b = cong (equivFun (⟦⅀⟧ 𝜏 B)) (transp-⅀IdlD B b)
                 ∙ secEq (⟦⅀⟧ 𝜏 B) (α , b)
@@ -476,25 +819,35 @@ module _ {𝒰 : Universe ℓc ℓe} where
       pair-path : (b : El (B α)) → (α , b) ≡ equivFun (⟦⅀⟧ 𝜏 B) (transp-B b)
       pair-path b = sym (pair-eq b)
 
+      -- Uncurried views of `C` and `tss`, used by `cong`/`funExt` rewrites below.
       C-uncurry : Σ (El 𝜏) (λ a → El (B a)) → Code
       C-uncurry (a , b) = C a b
 
       tss-uncurry : (p : Σ (El 𝜏) (λ a → El (B a))) → FreeOps K (C-uncurry p)
       tss-uncurry (a , b) = tss a b
 
+      -- The RHS-side codomain family on `b : El (B α)`: applying `⅀Assoc-C'` to
+      -- the `transp-B b` shape gives `C` evaluated at the canonical pair.
       C' : El (B α) → Code
       C' b = ⅀Assoc-C' 𝜏 B C (transp-B b)
 
+      -- The RHS-side continuation: `tss` re-indexed through `equivFun ⟦⅀⟧ ∘ transp-B`.
+      -- Will appear as the inner per-fibre function of the RHS `graft`.
       f' : (b : El (B α)) → FreeOps K (C' b)
       f' b = tss (fst (equivFun (⟦⅀⟧ 𝜏 B) (transp-B b)))
                  (snd (equivFun (⟦⅀⟧ 𝜏 B) (transp-B b)))
 
+      -- Per-fibre Code-level equality `C α b ≡ C' b`, used by `tss-eq` below.
       q-fn : (b : El (B α)) → C α b ≡ C' b
       q-fn b = cong C-uncurry (pair-path b)
 
+      -- The pointwise-bundled version, used inside `graft-subst-snd` calls.
       q : C α ≡ C'
       q = funExt q-fn
 
+      -- Per-fibre: substing `tss α b` along `funExt⁻ q b` gives `f' b`. Proved
+      -- by `fromPathP` of `cong tss-uncurry (pair-path b)` — i.e. the heterogeneous
+      -- path obtained by `cong`ing `tss-uncurry` along the canonical pair path.
       tss-eq-fn : (b : El (B α)) → subst (FreeOps K) (funExt⁻ q b) (tss α b) ≡ f' b
       tss-eq-fn b = fromPathP {A = λ i → FreeOps K (q-fn b i)}
                               (cong tss-uncurry (pair-path b))
@@ -502,9 +855,12 @@ module _ {𝒰 : Universe ℓc ℓe} where
       tss-eq : (λ b → subst (FreeOps K) (funExt⁻ q b) (tss α b)) ≡ f'
       tss-eq = funExt tss-eq-fn
 
+      -- Abbreviation: the `graft` at the leaf-fibre, used as the operand on which
+      -- both sides of `eq-leaf` apply substs/transports.
       inner-graft : FreeOps K (⅀ (B α) (C α))
       inner-graft = graft K (B α) (C α) (ts α) (tss α)
 
+      -- The two ends of the `toPathP`-unfolded goal.
       LHS RHS : FreeOps K (Inj (⅀Assoc≃ 𝜏 B C) i1)
       LHS = transport (λ i → FreeOps K (Inj (⅀Assoc≃ 𝜏 B C) i))
                       (graft K 𝜏 (λ a → ⅀ (B a) (C a)) leaf
@@ -514,17 +870,21 @@ module _ {𝒰 : Universe ℓc ℓe} where
                   (λ ab → tss (fst (equivFun (⟦⅀⟧ 𝜏 B) ab))
                               (snd (equivFun (⟦⅀⟧ 𝜏 B) ab)))
 
-      -- eq-leaf : LHS ≡ RHS — fully constructive.
-      -- Strategy: Code-level `bridge` via InjSec + pointwise descent through
-      -- `⅀Assoc≃` (one secEq + subst-of-Σ-snd), then chain with substComposite,
-      -- graft-subst-snd, tss-eq, sym graft-subst-fst.
-      -- Helpers built below: funExt-q-decomp, c₀'-of, snd-PathP, σ-bridge,
-      -- ⅀Assoc-cont, LHS-chain, RHS-chain, pointwise, equivs-agree, bridge.
+      -- Helpers built below, in the order they are needed by `eq-leaf`:
+      --   funExt-q-decomp : decomposes `funExt⁻ q b` along the `pair-path`/
+      --                     `⅀Assoc-C'` factorisation.
+      --   c₀'-of, snd-PathP, σ-bridge : the Σ-pair bridge that the `bridge` path
+      --                     reduces to pointwise (one `secEq` step).
+      --   LHS-chain / RHS-chain / pointwise / equivs-agree / bridge : standard
+      --                     `InjSec`-sandwich proving the Code-path equality.
+      --   eq-leaf : the final 6-step `substComposite`/`graft-subst-{fst,snd}`
+      --                     chain that consumes `bridge` and `tss-eq`.
 
-      -- funExt-q-decomp: split funExt⁻ q b₀ into the two factors used to
-      -- characterise the snd-PathP. Uses symDistr + congFunct; the final
-      -- step `cong C-uncurry ∘ cong (equivFun ⟦⅀⟧) = cong (⅀Assoc-C' …)` is
-      -- definitional via Assoc-C'-uncurry-refl.
+      -- Split `funExt⁻ q b₀` into its two natural factors: the `secEq`-driven
+      -- shift on the Σ-pair side and the `transp-⅀IdlD`-driven shift on the
+      -- `⅀Assoc-C'` side. The proof is `symDistr` + `congFunct` on the body of
+      -- `q-fn`; the final identification of `cong C-uncurry ∘ cong (equivFun ⟦⅀⟧)`
+      -- with `cong (⅀Assoc-C' …)` is definitional (`Assoc-C'-uncurry-refl`).
       opaque
         funExt-q-decomp : (b₀ : El (B α))
                         → funExt⁻ q b₀
@@ -538,9 +898,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                       (sym (secEq (⟦⅀⟧ 𝜏 B) (α , b₀)))
                       (cong (equivFun (⟦⅀⟧ 𝜏 B)) (sym (transp-⅀IdlD B b₀)))
 
-      -- c₀'-of x : the "shifted" snd component of the LHS-of-bridge transport.
-      -- Definitionally equal to `subst (λ ab → El (C (fst ab) (snd ab))) (sym (secEq …)) c₀`
-      -- which arises from unfolding invEq (Σ-cong-equiv-fst (⟦⅀⟧ 𝜏 B)).
+      -- The "shifted" `snd`-component arising on the LHS of `σ-bridge`. Unfolding
+      -- `Assoc-cont 𝜏 B C (α , x)` along its inverse-of-`Σ-cong-equiv-fst` step
+      -- yields exactly `subst (C ∘ uncurry) (sym (secEq ⟦⅀⟧ (α , b₀))) c₀`, which
+      -- is what `c₀'-of x` records. Used as the LHS endpoint of `snd-PathP`.
       c₀'-of : (x : El (⅀ (B α) (C α))) → El (⅀Assoc-C' 𝜏 B C (invEq (⟦⅀⟧ 𝜏 B)
                                                               (α , fst (equivFun (⟦⅀⟧ (B α) (C α)) x))))
       c₀'-of x = subst (λ ab → El (C (fst ab) (snd ab)))
@@ -548,8 +909,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                    (α , fst (equivFun (⟦⅀⟧ (B α) (C α)) x))))
                        (snd (equivFun (⟦⅀⟧ (B α) (C α)) x))
 
-      -- snd-PathP: heterogeneous path bridging the two snd-components of σ-bridge.
-      -- Built as transport-filler glued via funExt-q-decomp.
+      -- Heterogeneous path bridging the two `snd`-components of `σ-bridge`. Built
+      -- as a `transport-filler` (giving the right `i`-line in the ⅀Assoc-C'
+      -- direction) glued via `endpoint-fix` to the desired `transport (cong El
+      -- (funExt⁻ q b₀))` form. The endpoint adjustment uses `funExt-q-decomp` to
+      -- show the two paths agree.
       opaque
         snd-PathP : (x : El (⅀ (B α) (C α)))
                   → PathP (λ i → El (⅀Assoc-C' 𝜏 B C
@@ -585,7 +949,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                             (cong (⅀Assoc-C' 𝜏 B C) (sym (transp-⅀IdlD B b₀)))))
               ∙ cong (λ p → transport (cong El p) c₀) (sym (funExt-q-decomp b₀))
 
-      -- σ-bridge: the Σ-pair bridge inside `invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))`.
+      -- The Σ-pair bridge inside `invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))`: a path
+      -- of pairs whose `fst`-leg is `sym (transp-⅀IdlD B b₀)` and whose `snd`-leg
+      -- is `snd-PathP x`. Wrapped in `invEq ⟦⅀⟧` it equates `LHS-chain` and
+      -- `RHS-chain`'s endpoints, providing the propositional kernel of `pointwise`.
       opaque
         σ-bridge : (x : El (⅀ (B α) (C α)))
                  → Path (Σ (El (⅀ 𝜏 B)) (λ ab → El (⅀Assoc-C' 𝜏 B C ab)))
@@ -597,36 +964,17 @@ module _ {𝒰 : Universe ℓc ℓe} where
         σ-bridge x = ΣPathP (sym (transp-⅀IdlD B (fst (equivFun (⟦⅀⟧ (B α) (C α)) x)))
                             , snd-PathP x)
 
-      -- ⅀Assoc-cont: the "continuation" of ⅀Assoc≃ 𝜏 B C after equivFun (⟦⅀⟧ 𝜏 D₀).
-      -- By compEquiv reduction, `equivFun (⅀Assoc≃ 𝜏 B C) y ≡ ⅀Assoc-cont (equivFun (⟦⅀⟧ 𝜏 D₀) y)`
-      -- definitionally. We name it so we can rewrite under it via cong (⅀Assoc-cont) (secEq …).
-      open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-fst ; Σ-assoc-≃)
+      -- The "continuation" of `⅀Assoc≃ 𝜏 B C` after `equivFun (⟦⅀⟧ 𝜏 D₀)` is just
+      -- the toolkit's `Assoc-cont 𝜏 B C` (§5). The previous local `⅀Assoc-cont`,
+      -- `⅀Assoc-cont-refl`, and `⅀Assoc-cont-at-αx` definitions were renamings of
+      -- definitional equalities; with the toolkit they disappear.
 
-      ⅀Assoc-cont : Σ (El 𝜏) (λ a → El (D₀ a)) → El (⅀ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))
-      ⅀Assoc-cont p =
-        invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))
-              (invEq (Σ-cong-equiv-fst {B = λ ab → El (C (fst ab) (snd ab))} (⟦⅀⟧ 𝜏 B))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B a) (C a))) p)))
-
-      -- Sanity probe: ⅀Assoc-cont is the strict continuation of ⅀Assoc≃ post-⟦⅀⟧.
-      ⅀Assoc-cont-refl : (y : El (⅀ 𝜏 D₀))
-                       → equivFun (⅀Assoc≃ 𝜏 B C) y ≡ ⅀Assoc-cont (equivFun (⟦⅀⟧ 𝜏 D₀) y)
-      ⅀Assoc-cont-refl _ = refl
-
-      -- Sanity probe: ⅀Assoc-cont applied to (α , x) gives the explicit invEq form.
-      -- This is what the LHS-chain's final form unfolds to definitionally.
-      ⅀Assoc-cont-at-αx : (x : El (⅀ (B α) (C α)))
-                        → ⅀Assoc-cont (α , x)
-                        ≡ invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))
-                                (invEq (⟦⅀⟧ 𝜏 B) (α , fst (equivFun (⟦⅀⟧ (B α) (C α)) x))
-                                , c₀'-of x)
-      ⅀Assoc-cont-at-αx _ = refl
-
-      -- LHS-chain: reduces transport along ⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ …) to its canonical
-      -- invEq-of-Σ-pair form. The only propositional step is secEq (⟦⅀⟧ 𝜏 D₀) (α , x); the
-      -- rest is congFunct/substComposite for the path-composition and ⟦⅀Assoc⟧ + uaβ to
-      -- convert the transport along Inj (⅀Assoc≃) into equivFun (⅀Assoc≃).
+      -- Reduces `transport (cong El (⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C))) x` to its
+      -- canonical Σ-pair form. Strategy:
+      --   1. `congFunct` + `substComposite` split the path-composition transport.
+      --   2. `transp-⅀IdlD` rewrites the `⅀IdlD`-leg as `invEq ⟦⅀⟧ (α , x)`.
+      --   3. The remaining `transport (cong El (Inj (⅀Assoc≃ …)))` on a canonical
+      --      `invEq ⟦⅀⟧` pair is the §5 toolkit's `step-Assoc-on-pair`.
       opaque
         LHS-chain : (x : El (⅀ (B α) (C α)))
                   → transport (cong El (⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C))) x
@@ -640,13 +988,17 @@ module _ {𝒰 : Universe ℓc ℓe} where
                            (cong El (⅀IdlD 𝒰 D₀))
                            (cong El (Inj (⅀Assoc≃ 𝜏 B C))) x
           ∙ cong (transport (cong El (Inj (⅀Assoc≃ 𝜏 B C)))) (transp-⅀IdlD D₀ x)
-          ∙ cong (λ p → transport p (invEq (⟦⅀⟧ 𝜏 D₀) (α , x)))
-                 (sym (⟦⅀Assoc⟧ 𝜏 B C))
-          ∙ uaβ (⅀Assoc≃ 𝜏 B C) (invEq (⟦⅀⟧ 𝜏 D₀) (α , x))
-          ∙ cong ⅀Assoc-cont (secEq (⟦⅀⟧ 𝜏 D₀) (α , x))
+          ∙ step-Assoc-on-pair 𝜏 B C (α , x)
 
-      -- RHS-chain: reduces transport along cong (⅀ (B α)) q ∙ ⅀-subst-path … to its
-      -- canonical form. The only propositional step is secEq (⟦⅀⟧ (B α) C') (b₀, …).
+      -- Reduces `transport (cong El (cong (⅀ (B α)) q ∙ ⅀-subst-path …)) x` to its
+      -- canonical form. Strategy:
+      --   1. `congFunct` + `substComposite` split the path-composition.
+      --   2. `⟦⅀⟧-natural-snd` rewrites `transport (cong (⅀ (B α)) q)` as
+      --      `invEq ⟦⅀⟧ (b₀-of x , transport (funExt⁻ q) ∘ c₀-of x)` (the
+      --      `Σ-cong-equiv-snd` form).
+      --   3. `transp-⅀-subst-path` then handles the `⅀-subst-path` leg.
+      --   4. A final `secEq (⟦⅀⟧ (B α) C')` cancels the `equivFun ⟦⅀⟧ ∘ invEq ⟦⅀⟧`
+      --      that appears inside.
       opaque
         RHS-chain : (x : El (⅀ (B α) (C α)))
                   → transport (cong El (cong (⅀ (B α)) q
@@ -675,13 +1027,17 @@ module _ {𝒰 : Universe ℓc ℓe} where
             c₀-transported : (x : El (⅀ (B α) (C α))) → El (C' (b₀-of x))
             c₀-transported x = transport (cong El (funExt⁻ q (b₀-of x)))
                                          (snd (equivFun (⟦⅀⟧ (B α) (C α)) x))
-            -- transport-q-x: transport along cong (⅀ (B α)) q rewrites to invEq-of-pair.
+            -- Single step in `RHS-chain`: `transport (cong (⅀ (B α)) q)` applied
+            -- pointwise is `equivFun (⟦⅀⟧-natural-snd …)` of `x`, which is the
+            -- canonical Σ-cong-equiv-snd form.
             transport-q-x : transport (cong El (cong (⅀ (B α)) q)) x
                           ≡ invEq (⟦⅀⟧ (B α) C') (b₀-of x , c₀-transported x)
             transport-q-x =
                 cong (λ e → equivFun e x) (⟦⅀⟧-natural-snd 𝒰 (B α) q)
 
-      -- pointwise: the heart of the bridge proof — equates the two transports at every x.
+      -- The heart of the bridge proof: at every `x`, `LHS-chain x` and
+      -- `RHS-chain x` land in the same `invEq ⟦⅀⟧`-of-Σ-pair shape, and
+      -- `σ-bridge x` provides the propositional equality between those Σ-pairs.
       opaque
         pointwise : (x : El (⅀ (B α) (C α)))
                   → transport (cong El (⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C))) x
@@ -692,15 +1048,17 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong (invEq (⟦⅀⟧ (⅀ 𝜏 B) (⅀Assoc-C' 𝜏 B C))) (σ-bridge x)
           ∙ sym (RHS-chain x)
 
-      -- equivs-agree: pointwise wrapped as an equivalence equality.
-      -- NOT opaque (equivalence-valued).
+      -- Pointwise equality, packaged as `pathToEquiv`-equality. NOT opaque:
+      -- the .equiv-proof projection must remain accessible for downstream
+      -- `Inj`-image computations.
       equivs-agree : pathToEquiv (cong El (⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C)))
                    ≡ pathToEquiv (cong El (cong (⅀ (B α)) q
                                         ∙ ⅀-subst-path (⅀IdlD 𝒰 B) (⅀Assoc-C' 𝜏 B C)))
       equivs-agree = equivEq (funExt pointwise)
 
-      -- bridge: the Code-level path identity used to convert LHS double-subst into
-      -- the RHS form before applying graft-subst-{fst,snd} pushdowns.
+      -- Code-level path identity: the LHS index path (`⅀IdlD ∙ Inj (⅀Assoc≃)`)
+      -- and the RHS index path (`cong (⅀ (B α)) q ∙ ⅀-subst-path …`) coincide.
+      -- Standard `InjSec` sandwich on top of `equivs-agree`.
       opaque
         bridge : ⅀IdlD 𝒰 D₀ ∙ Inj (⅀Assoc≃ 𝜏 B C)
                ≡ cong (⅀ (B α)) q ∙ ⅀-subst-path (⅀IdlD 𝒰 B) (⅀Assoc-C' 𝜏 B C)
@@ -709,7 +1067,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong Inj equivs-agree
           ∙ InjSec 𝒰 (cong (⅀ (B α)) q ∙ ⅀-subst-path (⅀IdlD 𝒰 B) (⅀Assoc-C' 𝜏 B C))
 
-      -- eq-leaf: the final chain.
+      -- The final chain: `bridge` converts LHS's `substComposite` into the RHS's
+      -- one, then `graft-subst-snd` + `tss-eq` + `sym graft-subst-fst` push the
+      -- substs through the outer `graft` until both sides match.
       eq-leaf : LHS ≡ RHS
       eq-leaf =
           sym (substComposite (FreeOps K) (⅀IdlD 𝒰 D₀)
@@ -728,39 +1088,43 @@ module _ {𝒰 : Universe ℓc ℓe} where
         ∙ sym (graft-subst-fst K (⅀IdlD 𝒰 B) (⅀Assoc-C' 𝜏 B C) (ts α)
                                   (λ ab → tss (fst (equivFun (⟦⅀⟧ 𝜏 B) ab))
                                               (snd (equivFun (⟦⅀⟧ 𝜏 B) ab))))
-  -- eq-node (graft-assoc on `node A' B' k ts'`).  The per-fibre IH
-  -- `graft-assoc K (B' a') …` is supplied recursively for each a' : El A' and
-  -- lifted into a `node-path-pre-assoc` via `cong (⅀ A') (funExt per-fibre-Δ)`.
-  -- The Code-level `bridge-node` then aligns the LHS and RHS index paths,
-  -- after which a 6-step `substComposite` chain assembles `eq-node` at the
-  -- bottom of this `where` block.
+  -- Node case (A = ⅀ A' B'). The recursion goes one level deeper than the leaf
+  -- case: the per-fibre IH `graft-assoc K (B' a') …` is supplied recursively for
+  -- each `a' : El A'`, then lifted by `cong (⅀ A') (funExt per-fibre-Δ)` into a
+  -- heterogeneous `node-path-pre-assoc`. A Code-level `bridge-node` aligns the
+  -- LHS and RHS index paths; finally a 6-step `substComposite` chain at the
+  -- bottom of this `where`-block (`eq-node`) assembles the answer.
   graft-assoc K _ B C (node A' B' k ts') ts tss = toPathP eq-node
     where
-      open import Cubical.Data.Sigma.Properties using (Σ-cong-equiv-fst ; Σ-assoc-≃)
-
-      -- Canonical "pairing": the inverse of ⟦⅀⟧ A' B'.
+      -- The canonical "pairing": `paired a' b' = invEq ⟦⅀⟧ (a' , b')` is the
+      -- explicit Σ-pre-image used everywhere `⅀AssocD A' B' _` is unfolded.
       paired : (a' : El A') → El (B' a') → El (⅀ A' B')
       paired a' b' = invEq (⟦⅀⟧ A' B') (a' , b')
 
-      -- The intermediate index family after pushing graft-subst-fst.
+      -- Intermediate index family appearing inside `graft K (⅀ A' B') C _ _`'s
+      -- node-clause: each `a' : El A'` fibre becomes `⅀ (B' a') (B ∘ paired a')`.
       B'' : El A' → Code
       B'' a' = ⅀ (B' a') (λ b' → B (paired a' b'))
 
-      -- transport along ⅀AssocD 𝒰 A' B' B : ⅀ A' B'' ≡ ⅀ (⅀ A' B') B.
+      -- Transport along `⅀AssocD 𝒰 A' B' B`: the universe-path identifying
+      -- `⅀ A' B''` with `⅀ (⅀ A' B') B`.
       transp-⅀AB : El (⅀ A' B'') → El (⅀ (⅀ A' B') B)
       transp-⅀AB = transport (cong El (⅀AssocD 𝒰 A' B' B))
 
-      -- The post-⅀AssocD codomain on B'' : C1 z = ⅀Assoc-C' (⅀ A' B') B C (transp-⅀AB z).
+      -- The post-`⅀AssocD` codomain on `B''`: rebases `⅀Assoc-C' (⅀ A' B') B C`
+      -- through `transp-⅀AB`. The RHS of `graft-assoc` is built over this.
       C1 : El (⅀ A' B'') → Code
       C1 z = ⅀Assoc-C' (⅀ A' B') B C (transp-⅀AB z)
 
-      -- "C-uncurry" at the top Σ-level: a helper for cong-of-cong calculations.
+      -- Uncurried views of `C` and `tss` at the top Σ-level (over `⅀ A' B'`).
+      -- Provide the `cong`-friendly form used everywhere `Σ`-pair paths arise.
       C-curry-top : Σ (El (⅀ A' B')) (λ ab → El (B ab)) → Code
       C-curry-top (ab , b'') = C ab b''
 
       tss-curry-top : (p : Σ (El (⅀ A' B')) (λ ab → El (B ab))) → FreeOps K (C-curry-top p)
       tss-curry-top (ab , b'') = tss ab b''
 
+      -- The two endpoints of the `toPathP`-unfolded goal.
       LHS RHS : FreeOps K (Inj (⅀Assoc≃ (⅀ A' B') B C) i1)
       LHS = transport (λ i → FreeOps K (Inj (⅀Assoc≃ (⅀ A' B') B C) i))
                       (graft K (⅀ A' B') (λ a → ⅀ (B a) (C a)) (node A' B' k ts')
@@ -770,10 +1134,16 @@ module _ {𝒰 : Universe ℓc ℓe} where
                   (λ ab → tss (fst (equivFun (⟦⅀⟧ (⅀ A' B') B) ab))
                               (snd (equivFun (⟦⅀⟧ (⅀ A' B') B) ab)))
 
-      -- The inner subst-of-node on the LHS, before the outer Inj-transport.
+      -- LHS-side index family: after the inner `graft K (⅀ A' B') C` step of LHS
+      -- unfolds on `node A' B' k ts'`, each `a' : El A'` fibre carries the
+      -- doubly-Σ-shaped `⅀ (B' a') (⅀ (B ∘ paired a') (C ∘ paired a'))`.
       B-LHS : El A' → Code
       B-LHS a' = ⅀ (B' a') (λ b' → ⅀ (B (paired a' b')) (C (paired a' b')))
 
+      -- The LHS "inner node" before the outer `Inj (⅀Assoc≃ (⅀ A' B') B C)`-transport:
+      -- one `node` with codomain family `B-LHS` and per-fibre subtrees
+      -- `graft (B' a') _ (ts' a') _`, themselves built from `graft`s on `(ts ∘ paired)`
+      -- and `(tss ∘ paired)`.
       inner-LHS-node : FreeOps K (⅀ A' B-LHS)
       inner-LHS-node = node A' B-LHS k
                             (λ a' → graft K (B' a')
@@ -782,7 +1152,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                           (λ b' → graft K (B (paired a' b')) (C (paired a' b'))
                                                         (ts (paired a' b')) (tss (paired a' b'))))
 
-      -- The inner-RHS-actual-node after pushing graft-subst-fst + reducing graft on node.
+      -- RHS-side index family: after pushing `graft-subst-fst` across the outer
+      -- `graft` on the RHS and reducing `graft` at a `node`, each fibre becomes
+      -- `⅀ (B'' a') (C1 ∘ invEq ⟦⅀⟧ (a' , _))` — the "post-⅀AssocD" shape.
       B-RHS : El A' → Code
       B-RHS a' = ⅀ (B'' a') (λ b' → C1 (invEq (⟦⅀⟧ A' B'') (a' , b')))
 
@@ -804,77 +1176,51 @@ module _ {𝒰 : Universe ℓc ℓe} where
       --       PathP (⅀ A' (λ a' → per-fibre-Δ a' i)) inner-LHS-node inner-RHS-node.
       --   (e) bridge-node + the 6-step substComposite chain to eq-node.
 
-      -- (a) The Σ-level rebase for transp-⅀AB at canonical points.  Characterises
-      -- the iterated `equivFun ⟦⅀⟧ ∘ transp-⅀AB ∘ invEq ⟦⅀⟧` combinator on (a', z)
-      -- inputs — the `transp-⅀AssocD` analog of `transp-⅀IdlD`.
+      -- (a) Σ-level rebase for `transp-⅀AB` at canonical Σ-pair inputs `(a' , z)`.
+      -- This is the node-case analog of `transp-⅀IdlD`: it characterises the
+      -- iterated `equivFun ⟦⅀⟧ ∘ transp-⅀AB ∘ invEq ⟦⅀⟧` combinator and feeds
+      -- into both `snd-adjust-a'` and the `bridge-node` chain.
+
+      -- Per-fibre destructuring of `z : El (B'' a')` through `⟦⅀⟧ (B' a') (B ∘ paired a')`.
+      -- Bundled in an anonymous parametric module so `b'-of` and `c'-of` are visible
+      -- as `(a' : El A') (z : El (B'' a'))`-indexed functions below.
       module _ (a' : El A') (z : El (B'' a')) where
         b'-of : El (B' a')
         b'-of = fst (equivFun (⟦⅀⟧ (B' a') (λ b' → B (paired a' b'))) z)
         c'-of : El (B (paired a' b'-of))
         c'-of = snd (equivFun (⟦⅀⟧ (B' a') (λ b' → B (paired a' b'))) z)
 
-      -- The "intermediate" family used in ⅀AssocD's decomposition:
+      -- The "intermediate" family used inside `⅀AssocD 𝒰 A' B' B`'s decomposition:
+      -- before applying the `C'-eq` correction, `C-int a b = B (paired a b)`.
       C-int : (a : El A') → El (B' a) → Code
       C-int a b = B (paired a b)
 
-      -- C'-eq : ⅀Assoc-C' A' B' C-int ≡ B, exactly as in the body of ⅀AssocD.
+      -- The codomain-correction path that `⅀AssocD A' B' B` builds in: at every
+      -- `x : El (⅀ A' B')` the post-shuffle `⅀Assoc-C' A' B' C-int x` evaluates by
+      -- `retEq (⟦⅀⟧ A' B') x` to `B x`. This is the `C'-eq` of `transp-⅀AssocD-pair`
+      -- specialised to the node case (with γ = B).
       C'-eq : ⅀Assoc-C' A' B' C-int ≡ B
       C'-eq = funExt (λ x → cong B (retEq (⟦⅀⟧ A' B') x))
 
-      -- Step (a-1): transp via ⅀Assoc 𝒰 A' B' C-int factor.
-      -- Use ⟦⅀Assoc⟧ + uaβ. This is the same incantation as eq-leaf's LHS-chain step.
-      opaque
-        step-Assoc-on-pair : (a' : El A') (z : El (B'' a'))
-                           → transport (cong El (Inj (⅀Assoc≃ A' B' C-int)))
-                                       (invEq (⟦⅀⟧ A' B'') (a' , z))
-                           ≡ equivFun (⅀Assoc≃ A' B' C-int)
-                                      (invEq (⟦⅀⟧ A' B'') (a' , z))
-        step-Assoc-on-pair a' z =
-            cong (λ p → transport p (invEq (⟦⅀⟧ A' B'') (a' , z)))
-                 (sym (⟦⅀Assoc⟧ A' B' C-int))
-          ∙ uaβ (⅀Assoc≃ A' B' C-int) (invEq (⟦⅀⟧ A' B'') (a' , z))
+      -- Steps (a-1) and (a-2) collapse to one call to the §5 toolkit:
+      -- `step-Assoc-on-pair A' B' C-int (a' , z)` already returns `Assoc-cont …`.
+      -- The previous inner `step-Assoc-on-pair`, `Assoc-cont`, `Assoc-cont-refl`,
+      -- `Assoc-cont-explicit` definitions are subsumed; consumers below now go
+      -- through the toolkit forms (`Assoc-cont A' B' C-int` and friends).
 
-      -- Step (a-2): equivFun ⅀Assoc≃ unfolds at canonical input via secEq.
-      -- ⅀Assoc≃ A' B' C-int = ⟦⅀⟧ A' B''-int ⨟ Σ-cong-equiv-snd (⟦⅀⟧ (B' a) (C-int a))
-      --                       ⨟ invEquiv Σ-assoc-≃ ⨟ invEquiv (Σ-cong-equiv-fst (⟦⅀⟧ A' B'))
-      --                       ⨟ invEquiv (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
-      -- where B''-int a = ⅀ (B' a) (C-int a) = B'' a definitionally.
-      -- Apply to invEq (⟦⅀⟧ A' B'') (a' , z):
-      --   step 1: equivFun (⟦⅀⟧ A' B'') (invEq … (a' , z)) = (a' , z) via secEq.
-      --   step 2-4: η-Σ unfolding (definitional) reduces to:
-      --     invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int)) (paired a' b'-of , c'-substed)
-      --   where c'-substed = subst (λ p → El (C-int (fst p) (snd p))) (sym (secEq ⟦⅀⟧A'B' (paired a' b'-of))) c'-of.
-      Assoc-cont : (a' : El A') (z : El (B'' a'))
-                 → El (⅀ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
-      Assoc-cont a' z =
-        invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
-              (invEq (Σ-cong-equiv-fst {B = λ ab → El (C-int (fst ab) (snd ab))} (⟦⅀⟧ A' B'))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B' a) (C-int a)))
-                                      (a' , z))))
-
-      opaque
-        Assoc-cont-refl : (a' : El A') (z : El (B'' a'))
-                        → equivFun (⅀Assoc≃ A' B' C-int) (invEq (⟦⅀⟧ A' B'') (a' , z))
-                        ≡ Assoc-cont a' z
-        Assoc-cont-refl a' z =
-          cong (λ p → invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
-                            (invEq (Σ-cong-equiv-fst {B = λ ab → El (C-int (fst ab) (snd ab))} (⟦⅀⟧ A' B'))
-                                   (invEq Σ-assoc-≃
-                                          (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B' a) (C-int a))) p))))
-               (secEq (⟦⅀⟧ A' B'') (a' , z))
-
-      -- The transport along cong (⅀ (⅀ A' B')) C'-eq is via ⟦⅀⟧-natural-snd.
-      -- This produces a Σ-pair on the (⅀ A' B', B)-side via the canonical secEq cancellation.
-
+      -- The transport leg corresponding to the `cong (⅀ (⅀ A' B')) C'-eq` factor
+      -- of `⅀AssocD A' B' B`. Named to keep the proof body of `transp-⅀AB-factored`
+      -- readable.
       transp-C'-eq : El (⅀ (⅀ A' B') (⅀Assoc-C' A' B' C-int)) → El (⅀ (⅀ A' B') B)
       transp-C'-eq = transport (cong (λ B'' → El (⅀ (⅀ A' B') B'')) C'-eq)
 
-      -- The full transp-⅀AB factors via the two segments.
+      -- `transp-⅀AB` factors through `transp-C'-eq ∘ Assoc-cont`: split the
+      -- `⅀AssocD` path with `congFunct`/`substComposite`, then apply the §5
+      -- toolkit's `step-Assoc-on-pair` to the `Inj (⅀Assoc≃ …)`-leg.
       opaque
         transp-⅀AB-factored : (a' : El A') (z : El (B'' a'))
                             → transp-⅀AB (invEq (⟦⅀⟧ A' B'') (a' , z))
-                            ≡ transp-C'-eq (Assoc-cont a' z)
+                            ≡ transp-C'-eq (Assoc-cont A' B' C-int (a' , z))
         transp-⅀AB-factored a' z =
             cong (λ p → transport p (invEq (⟦⅀⟧ A' B'') (a' , z)))
                  (congFunct El (Inj (⅀Assoc≃ A' B' C-int)) (cong (⅀ (⅀ A' B')) C'-eq))
@@ -882,11 +1228,12 @@ module _ {𝒰 : Universe ℓc ℓe} where
                            (cong El (Inj (⅀Assoc≃ A' B' C-int)))
                            (cong El (cong (⅀ (⅀ A' B')) C'-eq))
                            (invEq (⟦⅀⟧ A' B'') (a' , z))
-          ∙ cong transp-C'-eq (step-Assoc-on-pair a' z ∙ Assoc-cont-refl a' z)
+          ∙ cong transp-C'-eq (step-Assoc-on-pair A' B' C-int (a' , z))
 
-      -- substed-c-of: the canonical "shifted" c-component arising from
-      -- invEq (Σ-cong-equiv-fst (⟦⅀⟧ A' B')) ((a', b'-of), c'-of). Used in
-      -- Assoc-cont-explicit and downstream in snd-adjust-a'.
+      -- The "shifted" `c`-component arising when `Assoc-cont A' B' C-int (a' , z)`
+      -- unfolds along its inverse-of-`Σ-cong-equiv-fst` step: it `subst`s
+      -- `c'-of a' z` along `sym (secEq ⟦⅀⟧ (a' , b'-of a' z))`. The local
+      -- specialisation of `substed-w` in §5's `transp-⅀AssocD-pair`.
       substed-c-of : (a' : El A') (z : El (B'' a'))
                    → El (⅀Assoc-C' A' B' C-int (paired a' (b'-of a' z)))
       substed-c-of a' z =
@@ -894,14 +1241,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (sym (secEq (⟦⅀⟧ A' B') (a' , b'-of a' z)))
               (c'-of a' z)
 
-      -- Assoc-cont reduces (definitionally up to η-Σ) to the above.
-      Assoc-cont-explicit : (a' : El A') (z : El (B'' a'))
-                          → Assoc-cont a' z
-                          ≡ invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
-                                  (paired a' (b'-of a' z) , substed-c-of a' z)
-      Assoc-cont-explicit _ _ = refl
-
-      -- transp-C'-eq on this canonical pair, via ⟦⅀⟧-natural-snd + secEq.
+      -- `transp-C'-eq` applied to a canonical `invEq ⟦⅀⟧` pair lands in another
+      -- canonical pair, with the `snd`-component now transported along
+      -- `funExt⁻ C'-eq (paired a' (b'-of a' z))`. Proof: `⟦⅀⟧-natural-snd` rewrites
+      -- the transport as `equivFun (Σ-cong-equiv-snd …)`, then a `secEq` cancels
+      -- the inner `equivFun ⟦⅀⟧ ∘ invEq ⟦⅀⟧`.
       opaque
         transp-C'-eq-on-canonical : (a' : El A') (z : El (B'' a'))
                                   → transp-C'-eq (invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
@@ -920,7 +1264,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
                  (secEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C-int))
                         (paired a' (b'-of a' z) , substed-c-of a' z))
 
-      -- We need to apply equivFun (⟦⅀⟧ (⅀ A' B') B) to the RHS to extract the pair.
+      -- Applying `equivFun ⟦⅀⟧` to a canonical `transp-⅀AB (invEq ⟦⅀⟧ (a' , z))`
+      -- recovers the Σ-pair `(paired a' (b'-of …) , transport-along-funExt⁻-C'-eq
+      -- (substed-c-of …))`. `transp-⅀AB-factored` followed by `transp-C'-eq-on-canonical`
+      -- delivers an `invEq ⟦⅀⟧`-of-pair, then `secEq` cancels the outer
+      -- `equivFun ∘ invEq` to expose the pair directly.
       opaque
         unfolding transp-⅀AB-factored transp-C'-eq-on-canonical
         ⟦⅀⟧-on-transp : (a' : El A') (z : El (B'' a'))
@@ -931,22 +1279,13 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                     (substed-c-of a' z))
         ⟦⅀⟧-on-transp a' z =
             cong (equivFun (⟦⅀⟧ (⅀ A' B') B))
-                 (transp-⅀AB-factored a' z ∙ cong transp-C'-eq (Assoc-cont-explicit a' z)
-                                           ∙ transp-C'-eq-on-canonical a' z)
+                 (transp-⅀AB-factored a' z ∙ transp-C'-eq-on-canonical a' z)
           ∙ secEq (⟦⅀⟧ (⅀ A' B') B) _
 
-      -- adj-coh: the half-adjoint coherence of an equivalence. From EquivJ at idEquiv
-      -- (where both sides are refl).
-      opaque
-        adj-coh : ∀ {ℓ} {A B' : Type ℓ} (e : A ≃ B') (b : B')
-                → cong (invEq e) (secEq e b) ≡ retEq e (invEq e b)
-        adj-coh {B' = B'} e =
-          EquivJ (λ _ e' → (b : B') → cong (invEq e') (secEq e' b) ≡ retEq e' (invEq e' b))
-                 (λ _ → refl) e
-
-      -- key-eq: `cong El (funExt⁻ C'-eq (paired a' (b'-of))) ≡
-      --          cong (λ ab → El (C-int (fst ab) (snd ab))) (secEq (⟦⅀⟧ A' B') (a' , b'-of))`.
-      -- Follows from adj-coh applied to ⟦⅀⟧ A' B'.
+      -- `adj-coh` and `key-eq`: `adj-coh` lives at module level (§5 toolkit).
+      -- `key-eq` is the C-int-level specialisation `cong El (funExt⁻ C'-eq …) ≡
+      -- cong (λ ab → El (C-int (fst ab) (snd ab))) (secEq ⟦⅀⟧ …)`, derived from
+      -- `adj-coh` on `⟦⅀⟧ A' B'`.
       opaque
         key-eq : (a' : El A') (z : El (B'' a'))
                → cong El (funExt⁻ C'-eq (paired a' (b'-of a' z)))
@@ -955,8 +1294,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
         key-eq a' z = cong (cong (λ x → El (B x)))
                            (sym (adj-coh (⟦⅀⟧ A' B') (a' , b'-of a' z)))
 
-      -- c'-of-eq: transporting substed-c-of along (cong El (funExt⁻ C'-eq …)) recovers c'-of.
-      -- Uses key-eq to align the two cong-paths, then the composed path lCancels to refl.
+      -- Recovers `c'-of a' z` from `substed-c-of a' z` by transporting along
+      -- `cong El (funExt⁻ C'-eq (paired a' (b'-of a' z)))`. The two subst paths
+      -- (the inner `secEq`-driven shift and the outer `funExt⁻ C'-eq` cong) are
+      -- exact inverses modulo `key-eq`; their composite `lCancel`s to `refl`,
+      -- and `transportRefl` then identifies the result with `c'-of`.
       opaque
         c'-of-eq : (a' : El A') (z : El (B'' a'))
                  → c'-of a' z
@@ -977,12 +1319,15 @@ module _ {𝒰 : Universe ℓc ℓe} where
                            (cong El (funExt⁻ C'-eq (paired a' (b'-of a' z))))
                            (c'-of a' z)
 
-      -- (b) snd-adjust-a' : the codomain functions on B'' a' are equal.
-      -- LHS : ⅀Assoc-C' (B' a') (B ∘ paired a') (λ b' b'' → C (paired a' b') b'')
-      --     = λ z → C (paired a' (fst (⟦⅀⟧ (B' a') ...) z)) (snd (⟦⅀⟧ ...) z)
-      -- RHS : λ z → C1 (invEq (⟦⅀⟧ A' B'') (a' , z))
-      --     = λ z → C-curry-top (equivFun ⟦⅀⟧ (...) (transp-⅀AB (invEq ⟦⅀⟧ ...)))
-      -- Bridge: (paired, c'-of) ≡ (paired, transport ... substed-c-of) ≡ equivFun ⟦⅀⟧ (...).
+      -- (b) `snd-adjust-a' a'`: the LHS-side and RHS-side codomain families on
+      -- `B'' a'` agree. Concretely,
+      --   LHS = ⅀Assoc-C' (B' a') (B ∘ paired a') (C ∘ paired a')
+      --       = λ z. C (paired a' (fst ⟦⅀⟧z)) (snd ⟦⅀⟧z)
+      --   RHS = λ z. C1 (invEq ⟦⅀⟧A'B'' (a' , z))
+      --       = λ z. C-curry-top (equivFun ⟦⅀⟧ (transp-⅀AB (invEq ⟦⅀⟧A'B'' (a' , z))))
+      -- The funExt bridge factors as two `cong C-curry-top` steps: a `c'-of-eq`-shift
+      -- on the `snd`-component, then `sym (⟦⅀⟧-on-transp …)` to swap the LHS pair
+      -- form for the RHS `equivFun ⟦⅀⟧ ∘ transp-⅀AB ∘ invEq ⟦⅀⟧` form.
       opaque
         snd-adjust-a' : (a' : El A')
                       → ⅀Assoc-C' (B' a') (λ b' → B (paired a' b')) (λ b' b'' → C (paired a' b') b'')
@@ -991,11 +1336,14 @@ module _ {𝒰 : Universe ℓc ℓe} where
             cong C-curry-top (ΣPathP (refl , c'-of-eq a' z))
           ∙ sym (cong C-curry-top (⟦⅀⟧-on-transp a' z)))
 
-      -- (c) The per-fibre PathP: combining the per-fibre IH with snd-adjust-a'.
-      -- Per-fibre IH provides a PathP over `Inj (⅀Assoc≃ (B' a') (B ∘ paired a') (λ b' b'' → C ...))`.
-      -- The RHS of this PathP has codomain `⅀Assoc-C' (B' a') ...`; we transport via
-      -- `cong (⅀ (B'' a')) snd-adjust-a'` to land at `λ z → C1 (invEq (⟦⅀⟧ A' B'') (a' , z))`.
+      -- (c) Per-fibre `PathP`. The per-fibre IH `graft-assoc K (B' a') …`
+      -- provides a heterogeneous path over `Inj (⅀Assoc≃ …)`. Its RHS endpoint
+      -- has codomain family `⅀Assoc-C' (B' a') …`; one further `subst` along
+      -- `cong (⅀ (B'' a')) (snd-adjust-a' a')` (handled by `step2` below) lands
+      -- it at the actual RHS codomain `λ z. C1 (invEq ⟦⅀⟧ (a' , z))`.
 
+      -- LHS endpoint of the per-fibre IH at fibre `a'`: the "inner-inner" graft
+      -- of LHS, parameterised on `(B (paired a' _), C (paired a' _))`.
       per-fibre-IH-from : (a' : El A') → FreeOps K (B-LHS a')
       per-fibre-IH-from a' =
         graft K (B' a') (λ b' → ⅀ (B (paired a' b')) (C (paired a' b')))
@@ -1003,6 +1351,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (λ b' → graft K (B (paired a' b')) (C (paired a' b'))
                             (ts (paired a' b')) (tss (paired a' b')))
 
+      -- RHS endpoint of the per-fibre IH at fibre `a'`: the "outer-graft of the
+      -- inner-graft" form on the `(B' a' , B ∘ paired a' , C ∘ paired a')` triple,
+      -- with continuation `tss ∘ paired a' ∘ ⟦⅀⟧` after one Σ destructuring.
       per-fibre-IH-to : (a' : El A')
                       → FreeOps K (⅀ (B'' a') (⅀Assoc-C' (B' a') (λ b' → B (paired a' b'))
                                                                   (λ b' b'' → C (paired a' b') b'')))
@@ -1013,6 +1364,8 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (λ ab → tss (paired a' (fst (equivFun (⟦⅀⟧ (B' a') (λ b' → B (paired a' b'))) ab)))
                           (snd (equivFun (⟦⅀⟧ (B' a') (λ b' → B (paired a' b'))) ab)))
 
+      -- The per-fibre IH itself — a recursive `graft-assoc` call at fibre `a'`.
+      -- This is where the structural induction on the operand tree pays off.
       per-fibre-IH-PathP : (a' : El A')
                         → PathP (λ i → FreeOps K (Inj (⅀Assoc≃ (B' a') (λ b' → B (paired a' b'))
                                                                 (λ b' b'' → C (paired a' b') b'')) i))
@@ -1022,14 +1375,18 @@ module _ {𝒰 : Universe ℓc ℓe} where
                     (λ b' b'' → C (paired a' b') b'')
                     (ts' a') (λ b' → ts (paired a' b')) (λ b' b'' → tss (paired a' b') b'')
 
-      -- The per-fibre-Δ a' is the Code-path used inside `cong (⅀ A') (funExt …)` for bridge.
+      -- Per-fibre Code-level path `B-LHS a' ≡ B-RHS a'`: compose the per-fibre
+      -- `Inj (⅀Assoc≃ …)` with the `cong (⅀ (B'' a')) (snd-adjust-a' a')`
+      -- correction. Used inside `node-path-pre-assoc` via `cong (⅀ A') (funExt …)`.
       per-fibre-Δ : (a' : El A') → B-LHS a' ≡ B-RHS a'
       per-fibre-Δ a' = Inj (⅀Assoc≃ (B' a') (λ b' → B (paired a' b')) (λ b' b'' → C (paired a' b') b''))
                      ∙ cong (⅀ (B'' a')) (snd-adjust-a' a')
 
-      -- Continuation-adjustment: the per-fibre IH's "tss"-continuation, post substing,
-      -- equals the actual RHS-side "tss-curry-top ∘ ⟦⅀⟧ ∘ transp-⅀AB ∘ invEq ⟦⅀⟧" form.
-      -- This is the analog of tss-eq in eq-leaf.
+      -- Continuation-adjustment (the node-case analog of `tss-eq` in `eq-leaf`):
+      -- substing the per-fibre IH's "tss"-continuation along `funExt⁻ (snd-adjust-a')`
+      -- recovers the actual RHS-side continuation `tss-curry-top ∘ ⟦⅀⟧ ∘ transp-⅀AB
+      -- ∘ invEq ⟦⅀⟧`. Proved by decomposing `snd-adjust-a'` into its two
+      -- `C-curry-top`-cong factors, then `substComposite + fromPathP` on each.
       cont-eq-fn : (a' : El A') (b' : El (B'' a'))
                  → subst (FreeOps K) (funExt⁻ (snd-adjust-a' a') b')
                          (tss (paired a' (b'-of a' b')) (c'-of a' b'))
@@ -1069,7 +1426,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                                 (transp-⅀AB (invEq (⟦⅀⟧ A' B'') (a' , b')))))
       cont-eq a' = funExt (cont-eq-fn a')
 
-      -- per-fibre-RHS-actual = ts-RHS a' from inner-RHS-node.
+      -- The per-fibre RHS endpoint, exactly as it appears inside `inner-RHS-node`'s
+      -- `node` body. Equal to `per-fibre-IH-to a'` modulo `snd-adjust-a'`-rebase
+      -- and `cont-eq` continuation-correction.
       per-fibre-RHS-actual : (a' : El A') → FreeOps K (B-RHS a')
       per-fibre-RHS-actual a' =
         graft K (B'' a') (λ b' → C1 (invEq (⟦⅀⟧ A' B'') (a' , b')))
@@ -1077,171 +1436,80 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (λ b' → tss-curry-top (equivFun (⟦⅀⟧ (⅀ A' B') B)
                                               (transp-⅀AB (invEq (⟦⅀⟧ A' B'') (a' , b')))))
 
-      -- per-fibre PathP: composes per-fibre IH with snd-adjust via graft-subst-snd.
+      -- Per-fibre `PathP` along the full `per-fibre-Δ a'`. Built as
+      -- `compPathP'` of the per-fibre IH (which lands at `per-fibre-IH-to`)
+      -- composed with `toPathP step2` (which closes the `cong (⅀ (B'' a'))
+      -- (snd-adjust-a' a')` gap via `graft-subst-snd` and `cont-eq`).
       per-fibre-Δ-PathP : (a' : El A')
                        → PathP (λ i → FreeOps K (per-fibre-Δ a' i))
                                (per-fibre-IH-from a') (per-fibre-RHS-actual a')
       per-fibre-Δ-PathP a' = compPathP' {B = FreeOps K} (per-fibre-IH-PathP a') (toPathP step2)
         where
-          -- step2 : subst (FreeOps K) (cong (⅀ (B'' a')) (snd-adjust-a' a')) (per-fibre-IH-to a')
-          --       ≡ per-fibre-RHS-actual a'
-          step2 : subst (FreeOps K) (cong (⅀ (B'' a')) (snd-adjust-a' a')) (per-fibre-IH-to a')
-                ≡ per-fibre-RHS-actual a'
-          step2 =
-              graft-subst-snd K (B'' a') (snd-adjust-a' a')
-                              (graft K (B' a') (λ b' → B (paired a' b')) (ts' a') (λ b' → ts (paired a' b')))
-                              (λ ab → tss (paired a' (b'-of a' ab)) (c'-of a' ab))
-            ∙ cong (λ f → graft K (B'' a') (λ b' → C1 (invEq (⟦⅀⟧ A' B'') (a' , b')))
-                                (graft K (B' a') (λ b' → B (paired a' b')) (ts' a')
-                                       (λ b' → ts (paired a' b'))) f)
-                   (cont-eq a')
+          opaque
+            -- Path-valued helper: subst-along-cong-of-snd-adjust on `per-fibre-IH-to`
+            -- composes the snd-adjust step with the continuation correction `cont-eq`.
+            step2 : subst (FreeOps K) (cong (⅀ (B'' a')) (snd-adjust-a' a')) (per-fibre-IH-to a')
+                  ≡ per-fibre-RHS-actual a'
+            step2 =
+                graft-subst-snd K (B'' a') (snd-adjust-a' a')
+                                (graft K (B' a') (λ b' → B (paired a' b')) (ts' a') (λ b' → ts (paired a' b')))
+                                (λ ab → tss (paired a' (b'-of a' ab)) (c'-of a' ab))
+              ∙ cong (λ f → graft K (B'' a') (λ b' → C1 (invEq (⟦⅀⟧ A' B'') (a' , b')))
+                                  (graft K (B' a') (λ b' → B (paired a' b')) (ts' a')
+                                         (λ b' → ts (paired a' b'))) f)
+                     (cont-eq a')
 
-      -- (d) node-path-pre-assoc: heterogeneous path from inner-LHS-node to inner-RHS-node.
+      -- (d) `node-path-pre-assoc`: heterogeneous path from `inner-LHS-node` to
+      -- `inner-RHS-node`, built by varying both the codomain family (via
+      -- `per-fibre-Δ`) and the per-fibre subtrees (via `per-fibre-Δ-PathP`).
       node-path-pre-assoc : PathP (λ i → FreeOps K (⅀ A' (λ a' → per-fibre-Δ a' i)))
                                   inner-LHS-node inner-RHS-node
       node-path-pre-assoc i = node A' (λ a' → per-fibre-Δ a' i) k
                                    (λ a' → per-fibre-Δ-PathP a' i)
 
-      -- The "bridge" path in Code: equates the LHS-Code-side path with the RHS-Code-side path.
+      -- The two Code-level paths that `bridge-node` will equate. `LHS-path` is
+      -- the path consumed by the outer `Inj (⅀Assoc≃ (⅀ A' B') B C)`-transport
+      -- on the LHS, after `⅀AssocD A' B' (λ a → ⅀ (B a) (C a))` has been split off.
       LHS-path : ⅀ A' B-LHS ≡ ⅀ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C)
       LHS-path = ⅀AssocD 𝒰 A' B' (λ a → ⅀ (B a) (C a)) ∙ Inj (⅀Assoc≃ (⅀ A' B') B C)
 
+      -- `RHS-path-tail` is the path appearing on the RHS after `graft-subst-fst`
+      -- has been pushed across the outer `graft`: an `⅀AssocD A' B'' C1` factor
+      -- followed by `⅀-subst-path` rebasing onto `⅀Assoc-C' (⅀ A' B') B C`.
       RHS-path-tail : ⅀ A' B-RHS ≡ ⅀ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C)
       RHS-path-tail = ⅀AssocD 𝒰 A' B'' C1
                     ∙ ⅀-subst-path (⅀AssocD 𝒰 A' B' B) (⅀Assoc-C' (⅀ A' B') B C)
 
-      -- ================================================================
-      -- bridge-node: constructive proof.
-      -- ================================================================
-      -- Strategy: sandwich the path equality between sym (InjSec) and InjSec,
-      -- reducing it to equivalence-equality on cong El. The equivalence-equality
-      -- is then proved pointwise (equivEq + funExt), and pointwise both sides
-      -- reduce to a canonical 3-deep Σ-shuffle Σ-form.
+      -- ----------------------------------------------------------------
+      -- bridge-node assembly
       --
-      -- The proof mirrors `bridge` in the leaf case (line 738) at the next
-      -- Σ-level up. Helpers below are the node-case analogs of:
-      --   - C-int / C'-eq (line 853-857)  →  C'-out / C'-eq-out (mid-level)
-      --   - step-Assoc-on-pair (863)     →  step-Assoc-on-pair-LHS (mid-level)
-      --                                    + step-Assoc-on-pair-outer (outermost)
-      --   - Assoc-cont (883), Assoc-cont-refl (893)
-      --       →  Assoc-cont-LHS + Assoc-cont-LHS-refl (mid-level)
-      --       →  outer-Assoc-cont + outer-Assoc-cont-refl (outermost)
-      --   - transp-⅀AB-factored (911)    →  transp-⅀AssocD-LHS-on-pair (mid)
-      --                                    + transp-⅀AssocD-RHS-on-pair (RHS)
-      --   - transp-C'-eq-on-canonical (942), ⟦⅀⟧-on-transp (962)
-      --                                  →  variants for LHS and RHS chains
-      --   - key-eq (987), c'-of-eq (997) →  key-eq-LHS, c'-of-eq-LHS
-      --                                    (and corresponding RHS variants)
+      -- Strategy: sandwich the Code-path equality between `sym (InjSec)` and
+      -- `InjSec`, reducing it to an equivalence-equality on `cong El`. The
+      -- equivalence-equality is then proved pointwise (`equivEq + funExt`).
+      -- At every canonical Σ-pair input, both sides reduce to a single
+      -- 3-deep Σ-shuffle Σ-form via the §5 Recipe applied at the LHS, RHS,
+      -- per-fibre, and outer levels.
+      -- ----------------------------------------------------------------
 
-      -- ----- Mid-level family and equality -----
+      -- The mid-level family C'-out a b = ⅀ (B (paired a b)) (C (paired a b)).
+      -- Used wherever a `B-LHS` index is destructured via `⟦⅀⟧`.
       C'-out : (a : El A') → El (B' a) → Code
       C'-out a b = ⅀ (B (paired a b)) (C (paired a b))
 
-      C'-eq-out : ⅀Assoc-C' A' B' C'-out ≡ (λ a → ⅀ (B a) (C a))
-      C'-eq-out = funExt (λ ab → cong (λ AB → ⅀ (B AB) (C AB)) (retEq (⟦⅀⟧ A' B') ab))
-
-      -- Assoc-cont-LHS : canonical Σ-shuffle continuation for ⅀Assoc≃ A' B' C'-out.
-      Assoc-cont-LHS : (a : El A') (z : El (B-LHS a))
-                     → El (⅀ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-      Assoc-cont-LHS a z =
-        invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-              (invEq (Σ-cong-equiv-fst {B = λ ab → El (C'-out (fst ab) (snd ab))} (⟦⅀⟧ A' B'))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B' a) (C'-out a))) (a , z))))
-
-      opaque
-        Assoc-cont-LHS-refl : (a : El A') (z : El (B-LHS a))
-                            → equivFun (⅀Assoc≃ A' B' C'-out) (invEq (⟦⅀⟧ A' B-LHS) (a , z))
-                            ≡ Assoc-cont-LHS a z
-        Assoc-cont-LHS-refl a z =
-          cong (λ p → invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                             (invEq (Σ-cong-equiv-fst {B = λ ab → El (C'-out (fst ab) (snd ab))} (⟦⅀⟧ A' B'))
-                                    (invEq Σ-assoc-≃
-                                           (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B' a) (C'-out a))) p))))
-               (secEq (⟦⅀⟧ A' B-LHS) (a , z))
-
-      opaque
-        step-Assoc-on-pair-LHS : (a : El A') (z : El (B-LHS a))
-                               → transport (cong El (Inj (⅀Assoc≃ A' B' C'-out)))
-                                           (invEq (⟦⅀⟧ A' B-LHS) (a , z))
-                               ≡ equivFun (⅀Assoc≃ A' B' C'-out) (invEq (⟦⅀⟧ A' B-LHS) (a , z))
-        step-Assoc-on-pair-LHS a z =
-            cong (λ p → transport p (invEq (⟦⅀⟧ A' B-LHS) (a , z)))
-                 (sym (⟦⅀Assoc⟧ A' B' C'-out))
-          ∙ uaβ (⅀Assoc≃ A' B' C'-out) (invEq (⟦⅀⟧ A' B-LHS) (a , z))
-
-      transp-C'-eq-out : El (⅀ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                       → El (⅀ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-      transp-C'-eq-out = transport (cong (λ B'' → El (⅀ (⅀ A' B') B'')) C'-eq-out)
-
-      -- Explicit "snd" components used in the LHS chain.
+      -- The fst/snd components extracted from `z : El (B-LHS a)` via `⟦⅀⟧`.
+      -- Kept because they're referenced in the canonical-form bridge below.
       b-of-LHS : (a : El A') (z : El (B-LHS a)) → El (B' a)
       b-of-LHS a z = fst (equivFun (⟦⅀⟧ (B' a) (C'-out a)) z)
 
       w-of-LHS : (a : El A') (z : El (B-LHS a)) → El (C'-out a (b-of-LHS a z))
       w-of-LHS a z = snd (equivFun (⟦⅀⟧ (B' a) (C'-out a)) z)
 
-      substed-w-of-LHS : (a : El A') (z : El (B-LHS a))
-                       → El (⅀Assoc-C' A' B' C'-out (paired a (b-of-LHS a z)))
-      substed-w-of-LHS a z =
-        subst (λ ab → El (C'-out (fst ab) (snd ab)))
-              (sym (secEq (⟦⅀⟧ A' B') (a , b-of-LHS a z)))
-              (w-of-LHS a z)
-
-      Assoc-cont-LHS-explicit : (a : El A') (z : El (B-LHS a))
-                              → Assoc-cont-LHS a z
-                              ≡ invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                                      (paired a (b-of-LHS a z) , substed-w-of-LHS a z)
-      Assoc-cont-LHS-explicit _ _ = refl
-
-      opaque
-        transp-C'-eq-out-on-canonical
-          : (a : El A') (z : El (B-LHS a))
-          → transp-C'-eq-out (invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                                     (paired a (b-of-LHS a z) , substed-w-of-LHS a z))
-          ≡ invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-                  ( paired a (b-of-LHS a z)
-                  , transport (cong El (funExt⁻ C'-eq-out (paired a (b-of-LHS a z))))
-                              (substed-w-of-LHS a z))
-        transp-C'-eq-out-on-canonical a z =
-            cong (λ e → equivFun e (invEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                                           (paired a (b-of-LHS a z) , substed-w-of-LHS a z)))
-                 (⟦⅀⟧-natural-snd 𝒰 (⅀ A' B') C'-eq-out)
-          ∙ cong (λ p → invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-                              (fst p ,
-                               transport (cong El (funExt⁻ C'-eq-out (fst p))) (snd p)))
-                 (secEq (⟦⅀⟧ (⅀ A' B') (⅀Assoc-C' A' B' C'-out))
-                        (paired a (b-of-LHS a z) , substed-w-of-LHS a z))
-
-      opaque
-        key-eq-LHS : (a : El A') (b : El (B' a))
-                   → cong El (funExt⁻ C'-eq-out (paired a b))
-                   ≡ cong (λ ab → El (C'-out (fst ab) (snd ab)))
-                          (secEq (⟦⅀⟧ A' B') (a , b))
-        key-eq-LHS a b = cong (cong (λ x → El (⅀ (B x) (C x))))
-                              (sym (adj-coh (⟦⅀⟧ A' B') (a , b)))
-
-      opaque
-        c'-of-eq-LHS : (a : El A') (z : El (B-LHS a))
-                     → w-of-LHS a z
-                     ≡ transport (cong El (funExt⁻ C'-eq-out (paired a (b-of-LHS a z))))
-                                 (substed-w-of-LHS a z)
-        c'-of-eq-LHS a z =
-            sym (transportRefl (w-of-LHS a z))
-          ∙ cong (λ p → transport p (w-of-LHS a z))
-                 (sym (lCancel (cong (λ ab → El (C'-out (fst ab) (snd ab)))
-                                      (secEq (⟦⅀⟧ A' B') (a , b-of-LHS a z)))))
-          ∙ cong (λ p → transport (cong (λ ab → El (C'-out (fst ab) (snd ab)))
-                                         (sym (secEq (⟦⅀⟧ A' B') (a , b-of-LHS a z))) ∙ p)
-                                    (w-of-LHS a z))
-                 (sym (key-eq-LHS a (b-of-LHS a z)))
-          ∙ substComposite (λ X → X)
-                           (cong (λ ab → El (C'-out (fst ab) (snd ab)))
-                                 (sym (secEq (⟦⅀⟧ A' B') (a , b-of-LHS a z))))
-                           (cong El (funExt⁻ C'-eq-out (paired a (b-of-LHS a z))))
-                           (w-of-LHS a z)
-
-      -- transport-along-⅀AssocD on canonical pair: collapse the inner subst.
+      -- Transport-along-⅀AssocD on canonical pair: a 1-line specialisation of
+      -- `transp-⅀AssocD-pair` (§5 toolkit) with γ = λ a → ⅀ (B a) (C a). All
+      -- the previous bookkeeping (Assoc-cont-LHS / step-Assoc-on-pair-LHS /
+      -- transp-C'-eq-out / key-eq-LHS / c'-of-eq-LHS / Assoc-cont-LHS-explicit /
+      -- substed-w-of-LHS / C'-eq-out / transp-C'-eq-out-on-canonical) is now
+      -- absorbed by the generic.
       opaque
         transp-⅀AssocD-LHS-on-pair
           : (a : El A') (z : El (B-LHS a))
@@ -1250,47 +1518,22 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ≡ invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
                   (paired a (b-of-LHS a z) , w-of-LHS a z)
         transp-⅀AssocD-LHS-on-pair a z =
-            cong (λ p → transport p (invEq (⟦⅀⟧ A' B-LHS) (a , z)))
-                 (congFunct El (Inj (⅀Assoc≃ A' B' C'-out)) (cong (⅀ (⅀ A' B')) C'-eq-out))
-          ∙ substComposite (λ X → X)
-                           (cong El (Inj (⅀Assoc≃ A' B' C'-out)))
-                           (cong El (cong (⅀ (⅀ A' B')) C'-eq-out))
-                           (invEq (⟦⅀⟧ A' B-LHS) (a , z))
-          ∙ cong transp-C'-eq-out (step-Assoc-on-pair-LHS a z ∙ Assoc-cont-LHS-refl a z)
-          ∙ cong transp-C'-eq-out (Assoc-cont-LHS-explicit a z)
-          ∙ transp-C'-eq-out-on-canonical a z
-          ∙ cong (λ w → invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-                              (paired a (b-of-LHS a z) , w))
-                 (sym (c'-of-eq-LHS a z))
+          transp-⅀AssocD-pair A' B' (λ ab → ⅀ (B ab) (C ab)) a z
 
-      -- ----- Outer continuation: equivFun (⅀Assoc≃ (⅀ A' B') B C) on canonical pair -----
-      outer-Assoc-cont : (ab : El (⅀ A' B')) (w : El (⅀ (B ab) (C ab)))
-                      → El (⅀ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
-      outer-Assoc-cont ab w =
-        invEq (⟦⅀⟧ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
-              (invEq (Σ-cong-equiv-fst {B = λ x → El (C (fst x) (snd x))} (⟦⅀⟧ (⅀ A' B') B))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ x → ⟦⅀⟧ (B x) (C x))) (ab , w))))
-
-      opaque
-        outer-Assoc-cont-refl
-          : (ab : El (⅀ A' B')) (w : El (⅀ (B ab) (C ab)))
-          → equivFun (⅀Assoc≃ (⅀ A' B') B C)
-                     (invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a))) (ab , w))
-          ≡ outer-Assoc-cont ab w
-        outer-Assoc-cont-refl ab w =
-          cong (λ p → invEq (⟦⅀⟧ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
-                             (invEq (Σ-cong-equiv-fst {B = λ x → El (C (fst x) (snd x))} (⟦⅀⟧ (⅀ A' B') B))
-                                    (invEq Σ-assoc-≃
-                                           (equivFun (Σ-cong-equiv-snd (λ x → ⟦⅀⟧ (B x) (C x))) p))))
-               (secEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a))) (ab , w))
-
-      -- The canonical Σ-form both LHS and RHS chains reduce to.
+      -- The canonical Σ-form both LHS and RHS chains reduce to. Just the
+      -- toolkit's `Assoc-cont` at the outer level `(⅀ A' B', B, C)`, applied to
+      -- the `paired a (b-of-LHS a z) , w-of-LHS a z` pair. The previous local
+      -- `outer-Assoc-cont` / `outer-Assoc-cont-refl` are subsumed by `Assoc-cont`
+      -- / `Assoc-cont-at-pair`.
       canonical-form : (a : El A') (z : El (B-LHS a))
                      → El (⅀ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
       canonical-form a z =
-        outer-Assoc-cont (paired a (b-of-LHS a z)) (w-of-LHS a z)
+        Assoc-cont (⅀ A' B') B C (paired a (b-of-LHS a z) , w-of-LHS a z)
 
+      -- LHS-side reduction at a canonical Σ-pair input. Mirrors `LHS-chain` of
+      -- the leaf case: split `LHS-path` with `congFunct + substComposite`, apply
+      -- `transp-⅀AssocD-LHS-on-pair` to the inner `⅀AssocD`-leg, then `step-Assoc-on-pair`
+      -- to the outer `Inj (⅀Assoc≃ (⅀ A' B') B C)`-leg.
       opaque
         LHS-chain-on-pair
           : (a : El A') (z : El (B-LHS a))
@@ -1306,15 +1549,12 @@ module _ {𝒰 : Universe ℓc ℓe} where
                            (invEq (⟦⅀⟧ A' B-LHS) (a , z))
           ∙ cong (transport (cong El (Inj (⅀Assoc≃ (⅀ A' B') B C))))
                  (transp-⅀AssocD-LHS-on-pair a z)
-          ∙ cong (λ p → transport p (invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-                                            (paired a (b-of-LHS a z) , w-of-LHS a z)))
-                 (sym (⟦⅀Assoc⟧ (⅀ A' B') B C))
-          ∙ uaβ (⅀Assoc≃ (⅀ A' B') B C)
-                (invEq (⟦⅀⟧ (⅀ A' B') (λ a → ⅀ (B a) (C a)))
-                       (paired a (b-of-LHS a z) , w-of-LHS a z))
-          ∙ outer-Assoc-cont-refl (paired a (b-of-LHS a z)) (w-of-LHS a z)
+          ∙ step-Assoc-on-pair (⅀ A' B') B C
+                               (paired a (b-of-LHS a z) , w-of-LHS a z)
 
-      -- Extend to arbitrary x via retEq.
+      -- Extend `LHS-chain-on-pair` from canonical-pair inputs to arbitrary
+      -- `x : El (⅀ A' B-LHS)` by `retEq (⟦⅀⟧ A' B-LHS) x` (`x ≡ invEq ⟦⅀⟧
+      -- (equivFun ⟦⅀⟧ x)`).
       a-of-x : El (⅀ A' B-LHS) → El A'
       a-of-x x = fst (equivFun (⟦⅀⟧ A' B-LHS) x)
 
@@ -1330,184 +1570,49 @@ module _ {𝒰 : Universe ℓc ℓe} where
             cong (transport (cong El LHS-path)) (sym (retEq (⟦⅀⟧ A' B-LHS) x))
           ∙ LHS-chain-on-pair (a-of-x x) (z-of-x x)
 
-      -- ===== RHS chain =====
+      -- ----------------------------------------------------------------
+      -- RHS chain
+      -- ----------------------------------------------------------------
 
-      -- C1'-out and C1'-eq-out: intermediate family for ⅀AssocD A' B'' C1.
+      -- Intermediate family for `⅀AssocD A' B'' C1`: `C1'-out a b` is `C1`
+      -- evaluated at the canonical Σ-pre-image.
       C1'-out : (a : El A') → El (B'' a) → Code
       C1'-out a b = C1 (invEq (⟦⅀⟧ A' B'') (a , b))
 
-      C1'-eq-out : ⅀Assoc-C' A' B'' C1'-out ≡ C1
-      C1'-eq-out = funExt (λ x → cong C1 (retEq (⟦⅀⟧ A' B'') x))
-
-      -- Assoc-cont-RHS : continuation of equivFun (⅀Assoc≃ A' B'' C1'-out).
-      Assoc-cont-RHS : (a : El A') (z : El (B-RHS a))
-                     → El (⅀ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-      Assoc-cont-RHS a z =
-        invEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-              (invEq (Σ-cong-equiv-fst {B = λ p → El (C1'-out (fst p) (snd p))} (⟦⅀⟧ A' B''))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B'' a) (C1'-out a))) (a , z))))
-
-      opaque
-        Assoc-cont-RHS-refl : (a : El A') (z : El (B-RHS a))
-                            → equivFun (⅀Assoc≃ A' B'' C1'-out)
-                                       (invEq (⟦⅀⟧ A' B-RHS) (a , z))
-                            ≡ Assoc-cont-RHS a z
-        Assoc-cont-RHS-refl a z =
-          cong (λ p → invEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                             (invEq (Σ-cong-equiv-fst {B = λ p → El (C1'-out (fst p) (snd p))} (⟦⅀⟧ A' B''))
-                                    (invEq Σ-assoc-≃
-                                           (equivFun (Σ-cong-equiv-snd (λ a → ⟦⅀⟧ (B'' a) (C1'-out a))) p))))
-               (secEq (⟦⅀⟧ A' B-RHS) (a , z))
-
-      opaque
-        step-Assoc-on-pair-RHS : (a : El A') (z : El (B-RHS a))
-                               → transport (cong El (Inj (⅀Assoc≃ A' B'' C1'-out)))
-                                           (invEq (⟦⅀⟧ A' B-RHS) (a , z))
-                               ≡ equivFun (⅀Assoc≃ A' B'' C1'-out) (invEq (⟦⅀⟧ A' B-RHS) (a , z))
-        step-Assoc-on-pair-RHS a z =
-            cong (λ p → transport p (invEq (⟦⅀⟧ A' B-RHS) (a , z)))
-                 (sym (⟦⅀Assoc⟧ A' B'' C1'-out))
-          ∙ uaβ (⅀Assoc≃ A' B'' C1'-out) (invEq (⟦⅀⟧ A' B-RHS) (a , z))
-
-      transp-C1'-eq-out : El (⅀ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                        → El (⅀ (⅀ A' B'') C1)
-      transp-C1'-eq-out = transport (cong (λ B''' → El (⅀ (⅀ A' B'') B''')) C1'-eq-out)
-
+      -- The fst/snd components extracted from `z : El (B-RHS a)` via `⟦⅀⟧`.
+      -- Kept because they're referenced in `RHS-chain-on-pair` below.
       b-of-RHS : (a : El A') (z : El (B-RHS a)) → El (B'' a)
       b-of-RHS a z = fst (equivFun (⟦⅀⟧ (B'' a) (C1'-out a)) z)
 
       w-of-RHS : (a : El A') (z : El (B-RHS a)) → El (C1'-out a (b-of-RHS a z))
       w-of-RHS a z = snd (equivFun (⟦⅀⟧ (B'' a) (C1'-out a)) z)
 
-      substed-w-of-RHS : (a : El A') (z : El (B-RHS a))
-                       → El (⅀Assoc-C' A' B'' C1'-out (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z)))
-      substed-w-of-RHS a z =
-        subst (λ p → El (C1'-out (fst p) (snd p)))
-              (sym (secEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z)))
-              (w-of-RHS a z)
-
-      Assoc-cont-RHS-explicit : (a : El A') (z : El (B-RHS a))
-                              → Assoc-cont-RHS a z
-                              ≡ invEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                                      (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , substed-w-of-RHS a z)
-      Assoc-cont-RHS-explicit _ _ = refl
-
-      opaque
-        transp-C1'-eq-out-on-canonical
-          : (a : El A') (z : El (B-RHS a))
-          → transp-C1'-eq-out (invEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                                      (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , substed-w-of-RHS a z))
-          ≡ invEq (⟦⅀⟧ (⅀ A' B'') C1)
-                  ( invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z)
-                  , transport (cong El (funExt⁻ C1'-eq-out (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z))))
-                              (substed-w-of-RHS a z))
-        transp-C1'-eq-out-on-canonical a z =
-            cong (λ e → equivFun e (invEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                                           (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , substed-w-of-RHS a z)))
-                 (⟦⅀⟧-natural-snd 𝒰 (⅀ A' B'') C1'-eq-out)
-          ∙ cong (λ p → invEq (⟦⅀⟧ (⅀ A' B'') C1)
-                              (fst p ,
-                               transport (cong El (funExt⁻ C1'-eq-out (fst p))) (snd p)))
-                 (secEq (⟦⅀⟧ (⅀ A' B'') (⅀Assoc-C' A' B'' C1'-out))
-                        (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , substed-w-of-RHS a z))
-
-      opaque
-        key-eq-RHS : (a : El A') (b : El (B'' a))
-                   → cong El (funExt⁻ C1'-eq-out (invEq (⟦⅀⟧ A' B'') (a , b)))
-                   ≡ cong (λ p → El (C1'-out (fst p) (snd p)))
-                          (secEq (⟦⅀⟧ A' B'') (a , b))
-        key-eq-RHS a b = cong (cong (λ x → El (C1 x)))
-                              (sym (adj-coh (⟦⅀⟧ A' B'') (a , b)))
-
-      opaque
-        c'-of-eq-RHS : (a : El A') (z : El (B-RHS a))
-                     → w-of-RHS a z
-                     ≡ transport (cong El (funExt⁻ C1'-eq-out (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z))))
-                                 (substed-w-of-RHS a z)
-        c'-of-eq-RHS a z =
-            sym (transportRefl (w-of-RHS a z))
-          ∙ cong (λ p → transport p (w-of-RHS a z))
-                 (sym (lCancel (cong (λ p → El (C1'-out (fst p) (snd p)))
-                                      (secEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z)))))
-          ∙ cong (λ p → transport (cong (λ p → El (C1'-out (fst p) (snd p)))
-                                         (sym (secEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z))) ∙ p)
-                                    (w-of-RHS a z))
-                 (sym (key-eq-RHS a (b-of-RHS a z)))
-          ∙ substComposite (λ X → X)
-                           (cong (λ p → El (C1'-out (fst p) (snd p)))
-                                 (sym (secEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z))))
-                           (cong El (funExt⁻ C1'-eq-out (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z))))
-                           (w-of-RHS a z)
-
+      -- Transport-along-⅀AssocD on canonical pair for the RHS side: a 1-line
+      -- specialisation of `transp-⅀AssocD-pair` (§5 toolkit) with γ = C1.
+      -- The previous bookkeeping for Assoc-cont-RHS / step-Assoc-on-pair-RHS /
+      -- transp-C1'-eq-out / key-eq-RHS / c'-of-eq-RHS / Assoc-cont-RHS-explicit /
+      -- substed-w-of-RHS / C1'-eq-out / transp-C1'-eq-out-on-canonical is now
+      -- absorbed by the generic.
       opaque
         transp-⅀AssocD-RHS-on-pair
           : (a : El A') (z : El (B-RHS a))
           → transport (cong El (⅀AssocD 𝒰 A' B'' C1)) (invEq (⟦⅀⟧ A' B-RHS) (a , z))
           ≡ invEq (⟦⅀⟧ (⅀ A' B'') C1)
                   (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , w-of-RHS a z)
-        transp-⅀AssocD-RHS-on-pair a z =
-            cong (λ p → transport p (invEq (⟦⅀⟧ A' B-RHS) (a , z)))
-                 (congFunct El (Inj (⅀Assoc≃ A' B'' C1'-out)) (cong (⅀ (⅀ A' B'')) C1'-eq-out))
-          ∙ substComposite (λ X → X)
-                           (cong El (Inj (⅀Assoc≃ A' B'' C1'-out)))
-                           (cong El (cong (⅀ (⅀ A' B'')) C1'-eq-out))
-                           (invEq (⟦⅀⟧ A' B-RHS) (a , z))
-          ∙ cong transp-C1'-eq-out (step-Assoc-on-pair-RHS a z ∙ Assoc-cont-RHS-refl a z)
-          ∙ cong transp-C1'-eq-out (Assoc-cont-RHS-explicit a z)
-          ∙ transp-C1'-eq-out-on-canonical a z
-          ∙ cong (λ w → invEq (⟦⅀⟧ (⅀ A' B'') C1)
-                              (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a z) , w))
-                 (sym (c'-of-eq-RHS a z))
+        transp-⅀AssocD-RHS-on-pair a z = transp-⅀AssocD-pair A' B'' C1 a z
 
-      -- ===== Per-fibre Σ-shuffle (used to compute transport along per-fibre-Δ) =====
+      -- ----------------------------------------------------------------
+      -- Per-fibre Σ-shuffle (used to compute transport along `per-fibre-Δ`)
+      --
+      -- At the per-fibre level, the toolkit's `Assoc-cont` and `step-Assoc-on-pair`
+      -- are instantiated with `(A := B' a , B := λ b' → B (paired a b') , C := λ b' b'' →
+      -- C (paired a b') b'')`. The previous local `Assoc-cont-per-fibre` etc. are
+      -- all subsumed; the only surviving locals are the `b''-of` / `c''-of` /
+      -- `shifted-c''-per-fibre` destructurings of a `w : El (C'-out a b)` value.
+      -- ----------------------------------------------------------------
 
-      Assoc-cont-per-fibre : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-        → El (⅀ (B'' a) (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
-                                            (λ b' b'' → C (paired a b') b'')))
-      Assoc-cont-per-fibre a b w =
-        invEq (⟦⅀⟧ (B'' a) (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
-                                                (λ b' b'' → C (paired a b') b'')))
-              (invEq (Σ-cong-equiv-fst {B = λ p → El (C (paired a (fst p)) (snd p))}
-                                        (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))))
-                     (invEq Σ-assoc-≃
-                            (equivFun (Σ-cong-equiv-snd (λ b' → ⟦⅀⟧ (B (paired a b')) (C (paired a b'))))
-                                      (b , w))))
-
-      opaque
-        Assoc-cont-per-fibre-refl
-          : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-          → equivFun (⅀Assoc≃ (B' a) (λ b' → B (paired a b'))
-                                      (λ b' b'' → C (paired a b') b''))
-                     (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
-          ≡ Assoc-cont-per-fibre a b w
-        Assoc-cont-per-fibre-refl a b w =
-          cong (λ p → invEq (⟦⅀⟧ (B'' a) (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
-                                                              (λ b' b'' → C (paired a b') b'')))
-                             (invEq (Σ-cong-equiv-fst {B = λ p → El (C (paired a (fst p)) (snd p))}
-                                                       (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))))
-                                    (invEq Σ-assoc-≃
-                                           (equivFun (Σ-cong-equiv-snd
-                                                       (λ b' → ⟦⅀⟧ (B (paired a b')) (C (paired a b')))) p))))
-               (secEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
-
-      opaque
-        step-Assoc-on-pair-per-fibre
-          : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-          → transport (cong El (Inj (⅀Assoc≃ (B' a) (λ b' → B (paired a b'))
-                                                      (λ b' b'' → C (paired a b') b''))))
-                      (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
-          ≡ Assoc-cont-per-fibre a b w
-        step-Assoc-on-pair-per-fibre a b w =
-            cong (λ p → transport p (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w)))
-                 (sym (⟦⅀Assoc⟧ (B' a) (λ b' → B (paired a b'))
-                                        (λ b' b'' → C (paired a b') b'')))
-          ∙ uaβ (⅀Assoc≃ (B' a) (λ b' → B (paired a b'))
-                                  (λ b' b'' → C (paired a b') b''))
-                (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
-          ∙ Assoc-cont-per-fibre-refl a b w
-
-      -- The explicit Σ-pair form of Assoc-cont-per-fibre at canonical inputs.
+      -- Destructure `w : El (C'-out a b) = El (⅀ (B (paired a b)) (C (paired a b)))`
+      -- via `⟦⅀⟧ (B (paired a b)) (C (paired a b))`.
       b''-of : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
              → El (B (paired a b))
       b''-of a b w = fst (equivFun (⟦⅀⟧ (B (paired a b)) (C (paired a b))) w)
@@ -1516,6 +1621,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
              → El (C (paired a b) (b''-of a b w))
       c''-of a b w = snd (equivFun (⟦⅀⟧ (B (paired a b)) (C (paired a b))) w)
 
+      -- The `subst`-shifted `c`-component arising inside the per-fibre
+      -- `Assoc-cont` at canonical pair `(b , w)`. Analog of `substed-c-of` at the
+      -- per-fibre level.
       shifted-c''-per-fibre
         : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
         → El (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
@@ -1526,23 +1634,21 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (sym (secEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w)))
               (c''-of a b w)
 
-      Assoc-cont-per-fibre-explicit
-        : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-        → Assoc-cont-per-fibre a b w
-        ≡ invEq (⟦⅀⟧ (B'' a) (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
-                                                (λ b' b'' → C (paired a b') b'')))
-                (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w) , shifted-c''-per-fibre a b w)
-      Assoc-cont-per-fibre-explicit _ _ _ = refl
+      -- ----------------------------------------------------------------
+      -- R1: transport via `cong (⅀ A') (funExt per-fibre-Δ)`. This is the
+      -- per-fibre Σ-shuffle, "lifted" to a snd-component of the outer Σ.
+      -- ----------------------------------------------------------------
 
-      -- ===== R1: transport via cong (⅀ A') (funExt per-fibre-Δ). =====
-
-      -- The "inner" snd component of transport (cong El (per-fibre-Δ a)) (invEq ⟦⅀⟧ (b, w)).
+      -- The "inner" `snd`-component of `transport (cong El (per-fibre-Δ a))` on a
+      -- canonical `invEq ⟦⅀⟧ (b , w)` input, before identifying it with `R1-snd-form`.
       R1-snd-on-pair : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
                      → El (B-RHS a)
       R1-snd-on-pair a b w =
         transport (cong El (per-fibre-Δ a)) (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
 
-      -- The Σ-pair form of R1-snd-on-pair.
+      -- The canonical Σ-pair shape that `R1-snd-on-pair` reduces to: `invEq ⟦⅀⟧`
+      -- of `(invEq ⟦⅀⟧ (b , b''-of a b w) , transport-along-snd-adjust …
+      -- (shifted-c''-per-fibre …))`.
       R1-snd-form
         : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
         → El (B-RHS a)
@@ -1553,6 +1659,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                               (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w))))
                           (shifted-c''-per-fibre a b w))
 
+      -- Identify `R1-snd-on-pair` with `R1-snd-form`. Mirrors `LHS-chain-on-pair`
+      -- at the per-fibre level: split `per-fibre-Δ` with `congFunct`/`substComposite`,
+      -- apply `step-Assoc-on-pair` to the `Inj (⅀Assoc≃ …)`-leg, then use
+      -- `⟦⅀⟧-natural-snd` + `secEq` for the `cong (⅀ (B'' a)) (snd-adjust-a' a)`-leg.
       opaque
         R1-snd-on-pair-eq
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1568,7 +1678,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
                            (cong El (cong (⅀ (B'' a)) (snd-adjust-a' a)))
                            (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
           ∙ cong (transport (cong (λ B''' → El (⅀ (B'' a) B''')) (snd-adjust-a' a)))
-                 (step-Assoc-on-pair-per-fibre a b w ∙ Assoc-cont-per-fibre-explicit a b w)
+                 (step-Assoc-on-pair (B' a) (λ b' → B (paired a b'))
+                                            (λ b' b'' → C (paired a b') b'')
+                                            (b , w))
           ∙ cong (λ e → equivFun e (invEq (⟦⅀⟧ (B'' a) (⅀Assoc-C' (B' a) (λ b' → B (paired a b'))
                                                                           (λ b' b'' → C (paired a b') b'')))
                                            ( invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w)
@@ -1582,7 +1694,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
                         ( invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w)
                         , shifted-c''-per-fibre a b w))
 
-      -- R1 on canonical pair (invEq ⟦⅀⟧ (a, z)).
+      -- `R1` lifted to the outer Σ: `transport (cong (⅀ A') (funExt per-fibre-Δ))`
+      -- of an `invEq ⟦⅀⟧ (a , z)` recovers `invEq ⟦⅀⟧ (a , transport-along-per-fibre-Δ z)`.
+      -- Direct application of `⟦⅀⟧-natural-snd` followed by `secEq`.
       opaque
         R1-on-pair
           : (a : El A') (z : El (B-LHS a))
@@ -1597,8 +1711,13 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                transport (cong El (funExt⁻ (funExt per-fibre-Δ) (fst p))) (snd p)))
                  (secEq (⟦⅀⟧ A' B-LHS) (a , z))
 
-      -- ===== The natural RHS-chain endpoint, RHS-form =====
+      -- ----------------------------------------------------------------
+      -- RHS-form: the canonical Σ-shape that `RHS-chain-on-pair` lands in.
+      -- ----------------------------------------------------------------
 
+      -- The natural endpoint of the RHS chain at a canonical pair `(a , z)`:
+      -- `invEq ⟦⅀⟧` of the pair `(transp-⅀AB (invEq ⟦⅀⟧ (a , b-of-RHS …)) , w-of-RHS …)`
+      -- where the RHS-side `b`/`w` are extracted from `transport-along-per-fibre-Δ z`.
       RHS-form : (a : El A') (z : El (B-LHS a))
                → El (⅀ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
       RHS-form a z =
@@ -1606,6 +1725,14 @@ module _ {𝒰 : Universe ℓc ℓe} where
               ( transp-⅀AB (invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a (transport (cong El (per-fibre-Δ a)) z)))
               , w-of-RHS a (transport (cong El (per-fibre-Δ a)) z))
 
+      -- RHS-side reduction at a canonical Σ-pair input. Three-stage chain:
+      --   1. Split `cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail` with
+      --      `congFunct`/`substComposite`, then apply `R1-on-pair` to the
+      --      first leg.
+      --   2. Split `RHS-path-tail = ⅀AssocD … ∙ ⅀-subst-path …` similarly, apply
+      --      `transp-⅀AssocD-RHS-on-pair` to the `⅀AssocD`-leg.
+      --   3. `transp-⅀-subst-path` handles the `⅀-subst-path` leg; a final
+      --      `secEq` cancels the inner `equivFun ⟦⅀⟧ ∘ invEq ⟦⅀⟧`.
       opaque
         RHS-chain-on-pair
           : (a : El A') (z : El (B-LHS a))
@@ -1639,9 +1766,12 @@ module _ {𝒰 : Universe ℓc ℓe} where
                         ( invEq (⟦⅀⟧ A' B'') (a , b-of-RHS a (transport (cong El (per-fibre-Δ a)) z))
                         , w-of-RHS a (transport (cong El (per-fibre-Δ a)) z)))
 
-      -- ===== Connecting RHS-form to canonical-form (σ-bridge) =====
+      -- ----------------------------------------------------------------
+      -- Connecting `RHS-form` to `canonical-form` (the node-case σ-bridge)
+      -- ----------------------------------------------------------------
 
-      -- Per-fibre b''-of, c''-of in terms of an arbitrary z : El (B-LHS a):
+      -- Convenience: `b''-of` and `c''-of` reapplied with the canonical
+      -- destructurings of an arbitrary `z : El (B-LHS a)`.
       b''-of-z : (a : El A') (z : El (B-LHS a)) → El (B (paired a (b-of-LHS a z)))
       b''-of-z a z = b''-of a (b-of-LHS a z) (w-of-LHS a z)
 
@@ -1649,6 +1779,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
                → El (C (paired a (b-of-LHS a z)) (b''-of-z a z))
       c''-of-z a z = c''-of a (b-of-LHS a z) (w-of-LHS a z)
 
+      -- The "shifted" `c''`-component at the outer Σ-level: `subst` of `c''-of`
+      -- along `sym (secEq ⟦⅀⟧ (⅀ A' B') B (paired a b , b''-of a b w))`. The
+      -- outermost analog of `substed-c-of` and `shifted-c''-per-fibre`.
       shifted-c''-outer
         : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
         → El (⅀Assoc-C' (⅀ A' B') B C
@@ -1658,13 +1791,17 @@ module _ {𝒰 : Universe ℓc ℓe} where
               (sym (secEq (⟦⅀⟧ (⅀ A' B') B) (paired a b , b''-of a b w)))
               (c''-of a b w)
 
+      -- `shifted-c''-outer` reapplied at the canonical destructurings of `z`.
       shifted-c''-outer-z
         : (a : El A') (z : El (B-LHS a))
         → El (⅀Assoc-C' (⅀ A' B') B C
                          (invEq (⟦⅀⟧ (⅀ A' B') B) (paired a (b-of-LHS a z) , b''-of-z a z)))
       shifted-c''-outer-z a z = shifted-c''-outer a (b-of-LHS a z) (w-of-LHS a z)
 
-      -- Canonical-form decomposed.
+      -- `canonical-form a z` definitionally unfolds (through `Assoc-cont`'s
+      -- five-fold Σ-shuffle) to the explicit `invEq ⟦⅀⟧ … (invEq ⟦⅀⟧ … ,
+      -- shifted-c''-outer-z …)` form. Recorded with `refl` so consumers can
+      -- `cong`-rewrite under this shape.
       canonical-form-explicit
         : (a : El A') (z : El (B-LHS a))
         → canonical-form a z
@@ -1673,8 +1810,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
                 , shifted-c''-outer-z a z)
       canonical-form-explicit _ _ = refl
 
-      -- transp-⅀AB on canonical pair (a, invEq ⟦⅀⟧ (b, b''))
-      -- This is the analog of transp-⅀IdlD used in the leaf case σ-bridge.
+      -- `transp-⅀AB` on a doubly-canonical pair `(a , invEq ⟦⅀⟧ (b , b''))`
+      -- recovers `invEq ⟦⅀⟧ (paired a b , b'')`. The node-case analog of
+      -- `transp-⅀IdlD` used in the leaf case's `σ-bridge`. Built by `transp-⅀AB-factored`
+      -- followed by `transp-C'-eq-on-canonical`, with a `c'-of-eq`-driven `ΣPathP`
+      -- and a final `secEq` to align the `subst` shape with the canonical form.
       opaque
         transp-⅀AssocD-on-canonical
           : (a : El A') (b : El (B' a)) (b'' : El (B (paired a b)))
@@ -1682,14 +1822,15 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ≡ invEq (⟦⅀⟧ (⅀ A' B') B) (paired a b , b'')
         transp-⅀AssocD-on-canonical a b b'' =
             transp-⅀AB-factored a (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''))
-          ∙ cong transp-C'-eq (Assoc-cont-explicit a (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b'')))
           ∙ transp-C'-eq-on-canonical a (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''))
           ∙ cong (λ p → invEq (⟦⅀⟧ (⅀ A' B') B) (paired a (fst p) , snd p))
                  ( ΣPathP (refl ,
                             sym (c'-of-eq a (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''))))
                  ∙ secEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''))
 
-      -- ⟦⅀⟧ applied to R1-snd-form a b w: recovers (q₁, q₂) by secEq.
+      -- `equivFun ⟦⅀⟧ ∘ R1-snd-form` recovers its underlying Σ-pair via `secEq`.
+      -- Used to bridge `R1-snd-on-pair-eq` (which lands in `R1-snd-form`) with
+      -- the Σ-shape consumed by `Σ-bridge-fst`.
       opaque
         ⟦⅀⟧-on-R1-snd-form
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1705,18 +1846,26 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                                 (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w))))
                             (shifted-c''-per-fibre a b w))
 
-      -- ===== σ-bridge: canonical-form a z ≡ RHS-form a z on canonical pair input =====
+      -- ----------------------------------------------------------------
+      -- σ-bridge: `canonical-form a z ≡ RHS-form a z` on canonical pair input.
+      -- Node-case analog of the leaf-case `σ-bridge`.
+      -- ----------------------------------------------------------------
 
-      -- The Σ-pair form of canonical-form a (invEq ⟦⅀⟧ (b, w)).
+      -- Σ-pair shape of `Assoc-cont (⅀ A' B') B C (paired a b , w)`: a `refl`
+      -- recording of how the toolkit's `Assoc-cont` unfolds at this specific
+      -- input. Used to rewrite the LHS of `σ-bridge-on-pair` into a form whose
+      -- `fst`/`snd` components can be paired separately via `Σ-bridge-fst`/`Σ-bridge-snd-…`.
       canonical-form-on-pair-Σ
         : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-        → outer-Assoc-cont (paired a b) w
+        → Assoc-cont (⅀ A' B') B C (paired a b , w)
         ≡ invEq (⟦⅀⟧ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C))
                 ( invEq (⟦⅀⟧ (⅀ A' B') B) (paired a b , b''-of a b w)
                 , shifted-c''-outer a b w)
       canonical-form-on-pair-Σ _ _ _ = refl
 
-      -- path1: the Σ-pair form of ⟦⅀⟧ R1-snd-on-pair.
+      -- `equivFun ⟦⅀⟧ (R1-snd-on-pair …)` in canonical Σ-pair form. Chain
+      -- `R1-snd-on-pair-eq` (which lands in `R1-snd-form`) with `⟦⅀⟧-on-R1-snd-form`
+      -- (which extracts its underlying Σ-pair).
       opaque
         path1
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1729,7 +1878,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
             cong (equivFun (⟦⅀⟧ (B'' a) (C1'-out a))) (R1-snd-on-pair-eq a b w)
           ∙ ⟦⅀⟧-on-R1-snd-form a b w
 
-      -- Σ-bridge fst-path component.
+      -- `fst`-leg of the Σ-bridge: identifies the `fst`-component of
+      -- `canonical-form a (invEq ⟦⅀⟧ (b , w))` with the `fst`-component of
+      -- `RHS-form a (invEq ⟦⅀⟧ (b , w))`. Composes `sym (transp-⅀AssocD-on-canonical …)`
+      -- with a `cong (transp-⅀AB ∘ invEq ⟦⅀⟧ ∘ (a , _))` of `sym (cong fst path1)`.
       opaque
         Σ-bridge-fst
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1740,7 +1892,8 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong (λ x → transp-⅀AB (invEq (⟦⅀⟧ A' B'') (a , x)))
                  (sym (cong fst (path1 a b w)))
 
-      -- The intermediate Σ-pair at the midpoint of Σ-bridge-fst.
+      -- Midpoint of `Σ-bridge-fst`: the `snd`-component at the intermediate
+      -- shape `transp-⅀AB (invEq ⟦⅀⟧ (a , invEq ⟦⅀⟧ (b , b''-of a b w)))`.
       Σ-bridge-mid-snd
         : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
         → El (⅀Assoc-C' (⅀ A' B') B C
@@ -1750,9 +1903,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                       (invEq (⟦⅀⟧ (B' a) (λ b' → B (paired a b'))) (b , b''-of a b w))))
                   (shifted-c''-per-fibre a b w)
 
-      -- PathP-part2: from Σ-bridge-mid-snd to w-of-RHS R1-snd-on-pair over
-      -- cong (λ x → transp-⅀AB (invEq ⟦⅀⟧ (a, x))) (sym (cong fst (path1 a b w))).
-      -- Built directly from path1.
+      -- Second leg of the Σ-bridge `snd`-component: heterogeneous path from
+      -- `Σ-bridge-mid-snd` to `w-of-RHS (R1-snd-on-pair …)`, varying along
+      -- `cong (transp-⅀AB ∘ invEq ⟦⅀⟧ ∘ (a , _)) (sym (cong fst (path1 …)))`.
+      -- Built directly as `λ i → snd (path1 (~ i))`.
       opaque
         Σ-bridge-snd-part2
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1763,8 +1917,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                   (w-of-RHS a (R1-snd-on-pair a b w))
         Σ-bridge-snd-part2 a b w = λ i → snd (path1 a b w (~ i))
 
-      -- snd-adjust-a' a is, by definition, a funExt of a 2-factor composition;
-      -- funExt⁻ at z' unfolds to that composition.
+      -- Unfold `funExt⁻ (snd-adjust-a' a) z'` along the definition of
+      -- `snd-adjust-a'` as a `funExt` of a 2-factor `∙`-composition. Recorded
+      -- with `refl` (after `unfolding snd-adjust-a'`) so consumers can rewrite
+      -- under this shape without paying a propositional step.
       opaque
         unfolding snd-adjust-a'
         snd-adjust-on-pair-decomp
@@ -1774,13 +1930,13 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ sym (cong C-curry-top (⟦⅀⟧-on-transp a z'))
         snd-adjust-on-pair-decomp _ _ = refl
 
-      -- path-bridge-LHS-to-RHS: the Code-level path equality consumed by
-      -- Σ-bridge-snd-part1-endpoint below.  Node-level analog of leaf-case
-      -- funExt-q-decomp.  Both sides factor as cong C-curry-top of paths in
-      -- Σ (El (⅀ A' B')) (λ ab → El (B ab)); the inner Σ-level equation closes
-      -- via a single homotopyNatural application against secEq ⟦⅀⟧ (⅀ A' B') B,
-      -- with the leading three segments of transp-⅀AssocD-on-canonical
-      -- cancelling against ⟦⅀⟧-on-transp.
+      -- Code-level path equality consumed by `Σ-bridge-snd-part1-endpoint` below.
+      -- The node-level analog of the leaf case's `funExt-q-decomp`. Both sides
+      -- factor as `cong C-curry-top` of paths in `Σ (El (⅀ A' B')) (λ ab → El (B ab))`;
+      -- the inner Σ-level equation closes via a single `homotopyNatural` application
+      -- against `secEq ⟦⅀⟧ (⅀ A' B') B`, with the three constituent steps of
+      -- `transp-⅀AssocD-on-canonical` cancelling against `⟦⅀⟧-on-transp` modulo
+      -- one `homotopyNatural`-driven `secEq` rearrangement.
       opaque
         unfolding transp-⅀AssocD-on-canonical snd-adjust-a' transp-⅀AB-factored transp-C'-eq-on-canonical ⟦⅀⟧-on-transp
         path-bridge-LHS-to-RHS
@@ -1819,13 +1975,16 @@ module _ {𝒰 : Universe ℓc ℓe} where
             Q1 = ΣPathP (refl , sym (c'-of-eq a z'))
             P  = Q1 ∙ secF
 
-            -- TAC's four constituent paths (as expressed in the body of
+            -- TAC's three constituent paths (as expressed in the body of
             -- transp-⅀AssocD-on-canonical, which is unfolded here).
+            -- Post-§5-toolkit refactor: the old `step2 = cong transp-C'-eq
+            -- (Assoc-cont-explicit a z')` step has been absorbed into the
+            -- definitional equality of `Assoc-cont A' B' C-int` with its
+            -- invEq form, so `step123` is now just `step1 ∙ step3`.
             step1 = transp-⅀AB-factored a z'
-            step2 = cong transp-C'-eq (Assoc-cont-explicit a z')   -- ≡ refl
             step3 = transp-C'-eq-on-canonical a z'
             step4 = cong (λ p → invEq ⟦⅀⟧' (paired a (fst p) , snd p)) P
-            step123 = step1 ∙ step2 ∙ step3
+            step123 = step1 ∙ step3
 
             TAC = transp-⅀AssocD-on-canonical a b (b''-of a b w)
 
@@ -1835,11 +1994,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
             H-pfs p = secEq ⟦⅀⟧' (pfs p)
 
             -- (1) Reassociate TAC as step123 ∙ step4.
-            --     TAC unfolds to step1 ∙ step2 ∙ step3 ∙ step4 (right-assoc).
+            --     TAC unfolds to step1 ∙ (step3 ∙ step4) (right-assoc).
             TAC-rearrange : TAC ≡ step123 ∙ step4
-            TAC-rearrange =
-                cong (step1 ∙_) (assoc step2 step3 step4)
-              ∙ assoc step1 (step2 ∙ step3) step4
+            TAC-rearrange = assoc step1 step3 step4
 
             -- (2) sym (cong (equivFun ⟦⅀⟧') step123) ≡ secM ∙ sym (⟦⅀⟧-on-transp a z').
             --     Uses that ⟦⅀⟧-on-transp a z' = cong (equivFun ⟦⅀⟧') step123 ∙ secM
@@ -1920,7 +2077,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
               --   and cong C-curry-top ∘ pfs ≡ λ p → C (paired a (fst p)) (snd p)
               --   are both definitional.
 
-      -- Mirror of leaf-case endpoint-fix (lines 625-640), one Σ-level up.
+      -- First leg of the Σ-bridge `snd`-component: endpoint-fix. Mirror of the
+      -- leaf case's `endpoint-fix` (inside `snd-PathP`), but one Σ-level up: it
+      -- takes the outer `shifted-c''-outer` and produces `Σ-bridge-mid-snd` by
+      -- a 5-step substComposite/`path-bridge-LHS-to-RHS`/substComposite chain
+      -- that swaps the LHS-side Code path for the RHS-side one.
       opaque
         Σ-bridge-snd-part1-endpoint
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
@@ -1966,13 +2127,19 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                                         (b , b''-of a b w))))
                            (c''-of a b w)
 
-      -- ===== bridge-node assembly (standard InjSec sandwich) =====
+      -- ----------------------------------------------------------------
+      -- bridge-node assembly (standard `InjSec` sandwich)
+      -- ----------------------------------------------------------------
 
+      -- On a canonical pair input `(invEq ⟦⅀⟧ (b , w))`, `canonical-form` (i.e.
+      -- the LHS-side Σ-shape) coincides with `RHS-form` (the RHS-side Σ-shape).
+      -- Built from `Σ-bridge-fst` (the `fst`-leg) and a `compPathP'` of
+      -- `Σ-bridge-snd-part1-endpoint` and `Σ-bridge-snd-part2` for the `snd`-leg.
       opaque
         unfolding Σ-bridge-fst
         σ-bridge-on-pair
           : (a : El A') (b : El (B' a)) (w : El (C'-out a b))
-          → outer-Assoc-cont (paired a b) w
+          → Assoc-cont (⅀ A' B') B C (paired a b , w)
           ≡ RHS-form a (invEq (⟦⅀⟧ (B' a) (C'-out a)) (b , w))
         σ-bridge-on-pair a b w =
           cong (invEq (⟦⅀⟧ (⅀ (⅀ A' B') B) (⅀Assoc-C' (⅀ A' B') B C)))
@@ -1981,6 +2148,8 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                     (toPathP (Σ-bridge-snd-part1-endpoint a b w))
                                     (Σ-bridge-snd-part2 a b w)))
 
+      -- Lift `σ-bridge-on-pair` from canonical-pair inputs to arbitrary
+      -- `z : El (B-LHS a)` by `retEq (⟦⅀⟧ (B' a) (C'-out a)) z`.
       opaque
         σ-bridge-base
           : (a : El A') (z : El (B-LHS a))
@@ -1989,6 +2158,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
             σ-bridge-on-pair a (b-of-LHS a z) (w-of-LHS a z)
           ∙ cong (RHS-form a) (retEq (⟦⅀⟧ (B' a) (C'-out a)) z)
 
+      -- The heart of the node-case bridge: at every `x : El (⅀ A' B-LHS)`, the
+      -- LHS and RHS Code-paths transport `x` to the same thing. Lifts
+      -- `σ-bridge-base` from a canonical Σ-pair input to arbitrary `x` via
+      -- two `retEq` applications.
       opaque
         pointwise-node
           : (x : El (⅀ A' B-LHS))
@@ -2001,10 +2174,14 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong (transport (cong El (cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail)))
                  (retEq (⟦⅀⟧ A' B-LHS) x)
 
+      -- Pointwise-equality packaged as `pathToEquiv`-equality. NOT opaque
+      -- (equivalence-valued; see §1 opacity rules).
       equivs-agree-node : pathToEquiv (cong El LHS-path)
                         ≡ pathToEquiv (cong El (cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail))
       equivs-agree-node = equivEq (funExt pointwise-node)
 
+      -- Code-level path identity: `LHS-path` and `cong (⅀ A') (funExt per-fibre-Δ)
+      -- ∙ RHS-path-tail` coincide. Standard `InjSec` sandwich on `equivs-agree-node`.
       opaque
         bridge-node : LHS-path ≡ cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail
         bridge-node =
@@ -2012,8 +2189,15 @@ module _ {𝒰 : Universe ℓc ℓe} where
           ∙ cong Inj equivs-agree-node
           ∙ InjSec 𝒰 (cong (⅀ A') (funExt per-fibre-Δ) ∙ RHS-path-tail)
 
-      -- eq-node final chain: six substComposite/cong/graft-subst-fst steps that
-      -- glue together (a)–(e) into the LHS ≡ RHS transport.
+      -- The final assembly. Six steps:
+      --   (1) Split LHS's `transport along LHS-path`: `substComposite` + `bridge-node`.
+      --   (2) Re-`substComposite` along the RHS-side path components.
+      --   (3) Use `fromPathP node-path-pre-assoc` to discharge the `cong (⅀ A')
+      --       (funExt per-fibre-Δ)` leg, replacing `inner-LHS-node` with the
+      --       substed `inner-RHS-node`-shape.
+      --   (4) Re-`substComposite` to split `RHS-path-tail`.
+      --   (5) `sym graft-subst-fst` to push the outer `subst` *into* the RHS
+      --       `graft`, reconstructing the actual RHS.
       eq-node : LHS ≡ RHS
       eq-node =
           sym (substComposite (FreeOps K)
@@ -2036,8 +2220,10 @@ module _ {𝒰 : Universe ℓc ℓe} where
                                                       (ts' a') (λ b' → ts (paired a' b'))))
                                   (λ ab → tss (fst (equivFun (⟦⅀⟧ (⅀ A' B') B) ab))
                                               (snd (equivFun (⟦⅀⟧ (⅀ A' B') B) ab))))
-  -- Set case: PathP into the set FreeOps K (⅀ (⅀ A B) (⅀Assoc-C' A B C)) is
-  -- a proposition; fill the square via isProp→SquareP.
+  -- Set case: the `PathP` into the set `FreeOps K (⅀ (⅀ A B) (⅀Assoc-C' A B C))`
+  -- is a proposition (`isOfHLevelPathP' 1`), so the square at the four faces of
+  -- the input `set`-cell is filled by `isProp→SquareP` from four recursive
+  -- `graft-assoc K A B C` calls.
   graft-assoc K A B C (set _ x y p q i j) ts tss =
     isProp→SquareP
       {B = λ i' j' → PathP (λ i'' → FreeOps K (Inj (⅀Assoc≃ A B C) i''))
@@ -2054,7 +2240,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
       (λ kk → graft-assoc K A B C (q kk) ts tss)
       i j
 
-  -- The free 𝒰-operad on K, assembled from the three laws above.
+  -- ============================================================================
+  -- §9  Operad assembly
+  --
+  -- The free 𝒰-operad on K, assembled from `leaf`, `graft`, and the three laws.
+  -- ============================================================================
   isSetFreeOps : (K : Code → Type ℓk) (A : Code) → isSet (FreeOps K A)
   isSetFreeOps K A = set A
 
