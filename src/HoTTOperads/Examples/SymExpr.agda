@@ -65,8 +65,9 @@ infixr 5 _⊎̂_
 ------------------------------------------------------------------------
 
 -- The "empty Σ" equivalence, lifted from inside ∅̂-Σ-path's where-clause so
--- that downstream proofs (sym-idr at val↑) can refer to it.  Kept transparent:
--- its .equiv-proof is consumed by `invEquiv` and `un-sym` later.
+-- that downstream proofs (sym-idr at val↑) can refer to it.
+-- Maintenance note: `invEquiv`/`un-sym` later consume this equivalence's
+-- `.equiv-proof`; keep it built via `isoToEquiv`.
 empty-Σ-≃ : {X : ⊥ → Type ℓ-zero} → ⊥ ≃ Σ ⊥ X
 empty-Σ-≃ = isoToEquiv (iso (λ x → ⊥-rec x)
                             (λ p → ⊥-rec (fst p))
@@ -263,7 +264,7 @@ opaque
 
 ------------------------------------------------------------------------
 -- The operadic composition, defined by induction on the SymExpr argument
--- (paper: SymmetricOperads.tex, lines 254-289).
+-- (Section 5, Symmetric Operads, Example 5.3).
 --
 --   id↑   : recurse-on-input via the singleton path B(tt) ≡ ⅀ 𝜏 B.
 --   val↑  : transport val↑ along ∅̂ ≡ ⅀ ∅̂ B.
@@ -306,7 +307,7 @@ private
       sym-comp _ (B-path i) (e-path i) (es-path i)
 
 ------------------------------------------------------------------------
--- Helper: un (opaque) equals Inj (transparent on 𝓕) — both reduce to
+-- Helper: on `𝓕`, `un` and `Inj` are the same map — both are
 -- Σ≡Prop (λ _ → isPropIsFinSet) (ua e).
 ------------------------------------------------------------------------
 opaque
@@ -419,13 +420,9 @@ opaque
 -- with Inj (⅀Idr≃ (A₁ ⊎̂ A₂)).
 ------------------------------------------------------------------------
 opaque
-  -- `unfolding un` is required because the chain below bridges
-  -- `cong fst (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))` (which unfolds via
-  -- `⊎̂-distr-path` to `cong fst (un … distr)`) with `ua distr` via
-  -- `cong-fst-Σ≡Prop _ (ua distr)`. That bridge needs `un` to reduce
-  -- to `Σ≡Prop _ (ua _)`. (Previously this worked through implicit
-  -- normalisation when isFinSetΣ was transparent; with `isFinSetΣ-op`
-  -- opaque the unifier no longer finds it on its own.)
+  -- The chain below bridges `cong fst (⊎̂-distr-path A₁ A₂ (λ _ → 𝜏))`
+  -- — which is `cong fst (un … distr)` — with `ua distr` via
+  -- `cong-fst-Σ≡Prop _ (ua distr)`, using that `un` is `Σ≡Prop _ (ua _)`.
   unfolding ⊎̂-distr-path un
 
   sym-idr-add↑-path : (A₁ A₂ : FinSet ℓ-zero)
@@ -523,12 +520,11 @@ opaque
   sym-idr : (A : FinSet ℓ-zero) (k : SymExpr A)
           → PathP (λ i → SymExpr (Inj {A = ⅀ A (λ _ → 𝜏)} {B = A} (⅀Idr≃ A) i))
                   (sym-comp A (λ _ → 𝜏) k (λ _ → id↑)) k
-  -- The dot-patterns `.𝜏`, `.∅̂`, `.(_ ⊎̂ _)` worked when ⅀FS was transparent
-  -- but fail under opaque isFinSetΣ-op: Agda's parser interprets `.𝜏` as a
-  -- copattern projection because `𝜏` is in scope as a record-field name from
-  -- `open UniverseHelpers 𝓕`. Bare variable patterns let Agda recover the
-  -- index of the SymExpr constructor (`id↑ : SymExpr 𝜏`, `val↑ _ : SymExpr ∅̂`,
-  -- `add↑ … : SymExpr (_ ⊎̂ _)`) without going through the ambiguous syntax.
+  -- Bare variable patterns are used, not dot-patterns `.𝜏`/`.∅̂`/`.(_ ⊎̂ _)`:
+  -- with `𝜏` in scope as a record-field name from `open UniverseHelpers 𝓕`,
+  -- Agda's parser reads `.𝜏` as a copattern projection. Bare patterns let
+  -- Agda recover the index of the SymExpr constructor (`id↑ : SymExpr 𝜏`,
+  -- `val↑ _ : SymExpr ∅̂`, `add↑ … : SymExpr (_ ⊎̂ _)`) unambiguously.
   sym-idr _ id↑ =
     subst (λ p → PathP (λ i → SymExpr (p i))
                        (sym-comp 𝜏 (λ _ → 𝜏) id↑ (λ _ → id↑)) id↑)
@@ -673,9 +669,9 @@ private
     -- We then use `ua-unglue Σ-idl-≃ i a` to bring `a` to `El (⅀ 𝜏 B)`,
     -- and apply `⅀Assoc-C' 𝜏 B C`.  At i=0 this is `C tt a` (Unit-η on
     -- `fst (tt, a)`); at i=1 this is `⅀Assoc-C' 𝜏 B C a`.  Both boundary
-    -- reductions are *definitional*, so consumers (`es-path-id↑`,
-    -- `bridge-id↑`, the path-equality lemma) typecheck cleanly without
-    -- the funExtDep + Glue-elimination dance.
+    -- values are *definitional*, so consumers (`es-path-id↑`,
+    -- `bridge-id↑`, the path-equality lemma) avoid the funExtDep +
+    -- Glue-elimination detour.
     B-path-id↑ : (B : El 𝜏 → FinSet ℓ-zero)
                  (C : (a : El 𝜏) → El (B a) → FinSet ℓ-zero)
                → PathP (λ i → El (𝜏-Σ-path B i) → FinSet ℓ-zero)
@@ -892,12 +888,11 @@ opaque
 ------------------------------------------------------------------------
 
 private
-  -- Joint family — kept TRANSPARENT (no opaque wrap).  Uniform body via
-  -- `distr-iso .fun` (which itself is uniform-Σ); reduces on `inl ab` /
-  -- `inr ab` to `C (inl (fst ab)) (snd ab)` / `C (inr (fst ab)) (snd ab)`,
-  -- matching `⅀Assoc-C' Aᵢ (B ∘ inl/inr) (C ∘ inl/inr) ab` after the
-  -- `⟦⅀⟧FS = idEquiv` reduction.  (Opaque-wrapping joint-C' was found
-  -- to block step-C-add↑'s boundary unification.)
+  -- Joint family: uniform body via `distr-iso .fun` (itself uniform-Σ);
+  -- computes on `inl ab` / `inr ab` to `C (inl (fst ab)) (snd ab)` /
+  -- `C (inr (fst ab)) (snd ab)`, matching
+  -- `⅀Assoc-C' Aᵢ (B ∘ inl/inr) (C ∘ inl/inr) ab` after the
+  -- `⟦⅀⟧FS = idEquiv` reduction.
   joint-C' : (A₁ A₂ : FinSet ℓ-zero)
              (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
              (C : (a : El (A₁ ⊎̂ A₂)) → El (B a) → FinSet ℓ-zero)
@@ -947,8 +942,8 @@ private
       kss (fst (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
           (snd (ua-unglue (isoToEquiv (distr-iso A₁ A₂ B)) i x))
 
-  -- IH-endpoint definitions.  Opaque so the surrounding bridges don't
-  -- re-expand the inner `sym-comp ∘ sym-comp` chains at every consumer.
+  -- IH-endpoint definitions: the inner `sym-comp ∘ sym-comp` chains
+  -- bundled as named endpoints, referenced by the surrounding bridges.
   opaque
     Xinner-L-add↑ : (A₁ A₂ : FinSet ℓ-zero)
                     (B : El (A₁ ⊎̂ A₂) → FinSet ℓ-zero)
@@ -1422,10 +1417,10 @@ opaque
 -- via `B ∘ inl` and `B ∘ inr` restrictions (mirroring IExpr-assoc's
 -- top-level dispatch at IExpr.agda:1553-1558).
 --
--- Uses bare-variable patterns (not dot-patterns like `.𝜏`/`.∅̂`/`.(_⊎̂_)`)
--- because under opaque `isFinSetΣ-op` the parser interprets `.𝜏` as a
--- copattern projection (the `𝜏` field of UniverseHelpers).  Same workaround
--- as `sym-idr` at lines 459-515.
+-- Uses bare-variable patterns (not dot-patterns `.𝜏`/`.∅̂`/`.(_⊎̂_)`):
+-- with `𝜏` a record-field name in scope (from `open UniverseHelpers 𝓕`),
+-- Agda's parser reads `.𝜏` as a copattern projection.  Same approach
+-- as `sym-idr`.
 ------------------------------------------------------------------------
 opaque
   unfolding Xinner-L-add↑ Xinner-R-add↑ recL-IHend-add↑ recR-IHend-add↑

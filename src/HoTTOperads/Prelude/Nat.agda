@@ -398,8 +398,7 @@ cong-Fin-fst {B = B} p = cong B (Fin-fst-≡ p)
 ------------------------------------------------------------------------
 -- (m+n)-level Fubini for `sum` and `sumFinFwd`. Generic Fin/ℕ-Fubini
 -- facts (no operadic content); used to discharge the add↑ case of
--- `IExpr-assoc` and any other (m+n)-indexed consumer. All sealed
--- `opaque` so they normalise once and are referenced by name downstream.
+-- `IExpr-assoc` and any other (m+n)-indexed consumer.
 ------------------------------------------------------------------------
 
 opaque

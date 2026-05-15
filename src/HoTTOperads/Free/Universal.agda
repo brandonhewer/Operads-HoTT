@@ -103,7 +103,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   -- ============================================================================
   -- §1  η — unit of the adjunction
   --
-  -- Paper (FreeOperad.tex:350): η A k = (node A k (λ _ → leaf), ⅀Idr 𝒰 A).
+  -- Paper (Section 9, Free Operad, Theorem 9.4): η A k = (node A k (λ _ → leaf), ⅀Idr 𝒰 A).
   -- In the HIT presentation, `node A B k ts : FreeOps K (⅀ A B)`, so the
   -- "(_, ⅀Idr 𝒰 A)" projection becomes a `subst` along `Inj (⅀Idr≃ A)`.
   -- ============================================================================

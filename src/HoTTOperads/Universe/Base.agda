@@ -14,7 +14,7 @@
 --   `Universe`      — base + coherences.
 --
 -- Formalises from the paper:
---   Definition 6.1 (Section 6, GeneralisedUniverses) — `Universe`,
+--   Definition 6.3 (Section 6, Generalised Operad Universes) — `Universe`,
 --                                                       built from
 --                                                       `UniverseBase` and
 --                                                       `UniverseCoh`.
@@ -35,8 +35,8 @@ private
     ℓ : Level
 
 -- Metatheoretic Σ identity/associativity equivalences used to derive the canonical universe equivalences.
--- NOTE: kept transparent — invEq-⅀Idl / invEq-⅀Idr below need their iso-bodies to reduce
--- for `cong tail (secEq …) : equivFun (⅀Idl≃ A) x ≡ b` to typecheck.
+-- Maintenance note: invEq-⅀Idl / invEq-⅀Idr are stated against the explicit
+-- Iso components of these equivalences; keep them presented via isoToEquiv.
 
 Σ-idl-≃ : {A : Unit → Type ℓ} → A tt ≃ (Σ Unit A)
 Σ-idl-≃ {A = A} = isoToEquiv (iso (λ a → tt , a) (λ p → snd p)
@@ -45,7 +45,7 @@ private
 Σ-idr-≃ : {A : Type ℓ} → (Σ[ _ ∈ A ] Unit) ≃ A
 Σ-idr-≃ = isoToEquiv (iso fst (λ a → a , tt) (λ _ → refl) (λ _ → refl))
 
--- Definition 6.1, part 1 (Section 6, GeneralisedUniverses).
+-- Definition 6.3, part 1 (Section 6, Generalised Operad Universes).
 -- The base universe structure: codes, interpretation, dependent-sum/unit
 -- formers with their interpretation equivalences, and a `Inj` map from
 -- equivalences of underlying types to paths between codes.
@@ -90,12 +90,12 @@ record UniverseBase (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) whe
       (invEquiv (Σ-cong-equiv-fst {B = λ ab → El (C (fst ab) (snd ab))} (⟦⅀⟧ A B)))
       (invEquiv (⟦⅀⟧ (⅀ A B) (⅀Assoc-C' A B C))))))
 
-  -- Canonical pre-images for ⅀Idl≃, ⅀Idr≃, ⅀Assoc≃: the explicit "unfolded" form
+  -- Canonical pre-images for ⅀Idl≃, ⅀Idr≃, ⅀Assoc≃: the explicit form
   -- agrees (propositionally) with the abstract invEq of the composite equivalence.
   -- Proofs go via uniqueness of inverses: if equivFun e x ≡ b then x ≡ invEq e b.
-  -- For each lemma, the relevant secEq is the only propositional step; the rest
-  -- of the chain is definitional thanks to η on Σ, isoToEquiv reducing invEq to
-  -- Iso.inv, and invEq (invEquiv e) reducing to equivFun e.
+  -- For each lemma the relevant secEq is the only propositional step; the rest
+  -- of the chain holds definitionally — η on Σ, the inverse of `isoToEquiv` is
+  -- `Iso.inv`, and `invEq (invEquiv e)` is `equivFun e`.
 
   opaque
     invEq-⅀Idl : (A : Code) (b : El A)
@@ -124,7 +124,7 @@ record UniverseBase (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) whe
         p : equivFun (⅀Idr≃ A) x ≡ a
         p = cong tail (secEq (⟦⅀⟧ A (λ _ → 𝜏)) (a , invEq ⟦𝜏⟧ tt))
 
--- Definition 6.1, part 2 (Section 6, GeneralisedUniverses).
+-- Definition 6.3, part 2 (Section 6, Generalised Operad Universes).
 -- The three path-level closure laws ⟦⅀Idl⟧, ⟦⅀Idr⟧, ⟦⅀Assoc⟧ saying that the
 -- canonical type-level Σ-identity/associativity equivalences are realised by
 -- `Inj` applied to the corresponding code-level equivalences.
@@ -140,7 +140,7 @@ record UniverseCoh {ℓc ℓe : Level} (𝒰 : UniverseBase ℓc ℓe) : Type (�
                             {B = ⅀ (⅀ A B) (⅀Assoc-C' A B C)}
                             (⅀Assoc≃ A B C))
 
--- Definition 6.1 (Section 6, GeneralisedUniverses).
+-- Definition 6.3 (Section 6, Generalised Operad Universes).
 -- A generalised operad universe = `UniverseBase` plus `UniverseCoh`.
 record Universe (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) where
   field

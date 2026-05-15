@@ -6,10 +6,10 @@
 -- the canonical equivalences (⅀Idl, ⅀Idr, ⅀Assoc via Inj), the two `Inj`
 -- coherence lemmas, and supporting h-prop facts about El 𝜏 / El (⅀ 𝜏 𝜏).
 --
--- Formalises from the paper (Section 6, GeneralisedUniverses):
---   Proposition 6.2 — `InjRefl`
---   Proposition 6.3 — `InjSec`
--- Plus derived path/h-prop infrastructure for Definition 6.1 used
+-- Formalises from the paper (Section 6, Generalised Operad Universes):
+--   Proposition 6.1 — `InjRefl`
+--   Proposition 6.2 — `InjSec`
+-- Plus derived path/h-prop infrastructure for Definition 6.3 used
 -- throughout the rest of the library.
 -- ============================================================================
 module HoTTOperads.Universe.Derived where
@@ -67,7 +67,7 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
       sym p ∙ p                 ≡⟨ lCancel p ⟩
       refl                      ∎
 
-    -- Proposition 6.2 (Section 6, GeneralisedUniverses).
+    -- Proposition 6.1 (Section 6, Generalised Operad Universes).
     -- Inj sends the identity equivalence to refl.
     InjRefl : (A : Code) → Inj (idEquiv (El A)) ≡ refl
     InjRefl A =
@@ -96,9 +96,9 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
                  ∙ cong Inj (invEquiv-is-rinv e)
                  ∙ InjRefl A
 
-    -- Proposition 6.3 (Section 6, GeneralisedUniverses).
+    -- Proposition 6.2 (Section 6, Generalised Operad Universes).
     -- Every path in `Code` is recovered as `Inj` of the corresponding
-    -- equivalence. Proof by path induction: at refl, cong El reduces to refl,
+    -- equivalence. Proof by path induction: at refl, `cong El refl` is refl,
     -- pathToEquiv refl ≡ idEquiv, so Inj (pathToEquiv (cong El refl)) ≡
     -- Inj (idEquiv) ≡ refl by InjRefl.
     InjSec : {A B : Code} (p : A ≡ B) → Inj (pathToEquiv (cong El p)) ≡ p
@@ -118,7 +118,7 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
   opaque
     -- ⟦⅀⟧-naturality in second argument: the transport along cong (El ∘ ⅀ A) q
     -- factors as ⟦⅀⟧ ⨟ Σ-cong-equiv-snd (pointwise transport) ⨟ invEquiv ⟦⅀⟧.
-    -- Provable by path induction: at q = refl, both sides reduce to idEquiv
+    -- Provable by path induction: at q = refl, both sides are idEquiv
     -- via pathToEquivRefl, Σ-cong-equiv-snd-id, and invEquiv-is-rinv on ⟦⅀⟧.
     ⟦⅀⟧-natural-snd : (A : Code) {B₁ B₂ : El A → Code} (q : B₁ ≡ B₂)
                     → pathToEquiv (cong (λ B → El (⅀ A B)) q)

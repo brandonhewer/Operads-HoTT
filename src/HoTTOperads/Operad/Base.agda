@@ -8,7 +8,7 @@
 -- the ⅀-identity/associativity equivalences.
 --
 -- Formalises from the paper:
---   Definition 6.4 (Section 6, GeneralisedUniverses) — the `Operad` record.
+--   Definition 6.4 (Section 6, Generalised Operad Universes) — the `Operad` record.
 -- When 𝒰 = 𝓝 this specialises to Definition 4.1 (planar operad,
 -- Section 4); when 𝒰 = 𝓕 it specialises to Definition 5.2 (symmetric
 -- operad, Section 5).
@@ -25,7 +25,7 @@ private
   variable
     ℓc ℓe ℓk : Level
 
--- Definition 6.4 (Section 6, GeneralisedUniverses).
+-- Definition 6.4 (Section 6, Generalised Operad Universes).
 -- A generalised 𝒰-operad on a family of h-sets K : Code 𝒰 → Type ℓk.
 -- The fields encode:
 --   isSetK : every K A is an h-set (paper hypothesis),

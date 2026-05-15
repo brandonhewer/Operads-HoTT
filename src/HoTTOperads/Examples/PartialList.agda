@@ -151,8 +151,9 @@ private
 -- style of IExpr.agda.
 ------------------------------------------------------------------------
 private
-  -- sum-split kept transparent: pl-comp-++ below pattern-matches on it
-  -- (the base-case PathP type involves sum-split zero q ns ix, which must reduce).
+  -- Maintenance note: `pl-comp-++` pattern-matches on `sum-split`, and its
+  -- base-case PathP type mentions `sum-split zero q ns ix`; keep `sum-split`
+  -- defined by the explicit recursion below.
   sum-split : (m n : ℕ) (B : Fin (m + n) → ℕ)
             → sum (m + n) B ≡ sum m (B ∘ inj-l-+ m n) + sum n (B ∘ inj-r-+ m n)
   sum-split zero    n B =
@@ -403,9 +404,9 @@ private
 ------------------------------------------------------------------------
 -- Value-level bridge lemmas: relate kss-suc on inj-l-+ / inj-r-+
 -- back to kss / (kss ∘ fsuc). The universe-level ⅀Assoc-C'-on-inl /
--- ⅀Assoc-C'-on-inr lemmas are re-used from Universe.Instances.Nat;
--- they are opaque there, so we unfold them inside this block to allow
--- the with-clauses below to reduce.
+-- ⅀Assoc-C'-on-inr lemmas (reused from Universe.Instances.Nat) are used
+-- here via their explicit definitions, so the with-clauses below compute
+-- on the index split.
 ------------------------------------------------------------------------
 private
  opaque

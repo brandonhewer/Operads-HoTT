@@ -572,7 +572,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
   -- path `⅀ 𝜏 (λ _ → A) ≡ A`. For the constant codomain `X = λ _ → A`, the
   -- helper `⅀IdlD 𝒰 X` used inside `graft K 𝜏 (λ _ → A) leaf (λ _ → t)`
   -- reduces definitionally to `sym (Inj (⅀Idl≃ A)) ∙ refl`, so composing with
-  -- `Inj (⅀Idl≃ A)` cancels. Following FreeOperad.tex §9 line 280 onwards.
+  -- `Inj (⅀Idl≃ A)` cancels. Following Section 9 (Free Operad).
   -- ============================================================================
   graft-idl : (K : Code → Type ℓk) (A : Code) (t : FreeOps K A)
             → PathP (λ i → FreeOps K (Inj (⅀Idl≃ A) i))
@@ -2017,7 +2017,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
               ∙ cong (_∙ sym (cong (equivFun ⟦⅀⟧') step123)) (lCancel (sym secM))
               ∙ sym (lUnit (sym (cong (equivFun ⟦⅀⟧') step123))) )
 
-            -- (3) cong (equivFun ⟦⅀⟧') (sym TAC) factors out an `⟦⅀⟧-on-transp` chunk.
+            -- (3) cong (equivFun ⟦⅀⟧') (sym TAC) factors out an `⟦⅀⟧-on-transp` subterm.
             cong-e-sym-TAC
               : cong (equivFun ⟦⅀⟧') (sym TAC)
               ≡ sym (cong (equivFun ⟦⅀⟧') step4) ∙ secM ∙ sym (⟦⅀⟧-on-transp a z')

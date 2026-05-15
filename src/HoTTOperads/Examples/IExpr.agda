@@ -4,7 +4,7 @@
 --
 -- The NonSymmOperad on the inductive family `IExpr : ℕ → Type`, whose
 -- operations are the abstract syntax of a tiny arithmetic-expression
--- language. We follow BasicIdea.tex §1: `id↑` is the unit at arity 1,
+-- language. We follow Section 3 (Basic Idea): `id↑` is the unit at arity 1,
 -- `val↑ n` an arity-0 value constant, and `add↑ e₁ e₂` an arity-`(m + n)`
 -- node built from `e₁ : IExpr m` and `e₂ : IExpr n`. Operadic composition
 -- `IExpr-comp` is defined by induction on the IExpr argument; the three
@@ -69,22 +69,17 @@
 --       joint-form bridge into the joint domain, D is `IExpr-comp-PathP`
 --       through the (m+n)-Fubini path.
 --
--- ## Opacity conventions
+-- ## Maintenance note
 --
--- Path-valued lemmas are `opaque`. `unfolding` lists are minimal — never
--- wider than the definitional reductions needed at the call site. The
--- four IH-endpoint definitions of §10 (`Xinner-L/R-add↑`,
--- `recL/R-IHend-add↑`) are `opaque` *and* unfolded in `IExpr-assoc`'s
--- final clause so the subst's motive matches the declared return type
--- by name. Several `where`-bound path-valued helpers inside long
--- `let`-blocks are themselves wrapped in `opaque` to seal one-shot
--- normalisations; proof-of-`<` propositions are kept transparent since
--- `isProp≤`/`isProp→PathP` already black-box them.
+-- The four IH-endpoint definitions of §10 (`Xinner-L/R-add↑`,
+-- `recL/R-IHend-add↑`) are referenced by name in `IExpr-assoc`'s final
+-- clause so that the `subst` motive matches the declared return type;
+-- keep their names and statements aligned with that clause.
 --
 -- Formalises from the paper:
 --   Section 3 (Basic Idea) — the motivating IExpr family and its operad
 --   structure. The paper does not number this construction (it is informal
---   in §3), so this module supplies the formal counterpart.
+--   there), so this module supplies the formal counterpart.
 -- ============================================================================
 module HoTTOperads.Examples.IExpr where
 
@@ -280,8 +275,8 @@ opaque
 
 -- The retract pair `(f, g)` and the round-trip `g ∘ f ≡ id`. Mirrors
 -- `SymExpr.f` / `SymExpr.g` / `SymExpr.g∘f` at the ℕ-indexed level.
--- `g∘f` is kept transparent: making it `opaque` breaks `substRefl`
--- family inference inside `isSetIExpr`.
+-- Maintenance note: `isSetIExpr` relies on the definitional shape of
+-- `g∘f` for `substRefl` family inference; keep it defined directly.
 IExprTreeΣ : ℕ → Type
 IExprTreeΣ n = Σ[ t ∈ Tree ] (shape t ≡ n)
 
@@ -316,7 +311,7 @@ opaque
 ------------------------------------------------------------------------
 -- §4  IExpr-comp: the n-ary operadic composition.
 --
--- Defined by induction on the IExpr argument (BasicIdea.tex §1):
+-- Defined by induction on the IExpr argument (Section 3, Basic Idea):
 --   * `id↑` at arity 1: the unique input is the result, transported
 --     across `+-zero` to land in `Fin (B fzero + 0)`.
 --   * `val↑ k` at arity 0: the result is `val↑ k` itself (no inputs).
@@ -607,20 +602,11 @@ private
   --
   -- The `inj-r-+` arm needs a propositional `(L+k ∸ L) ≡ k` bridge in
   -- `Fin (sum n (B ∘ inj-r-+ m n))`. We factor *both* the underlying
-  -- ℕ-path and its `Fin-fst-≡` lift as shared `opaque` definitions so
-  -- that:
-  --   (1) `joint-C'-on-inj-r-+`'s family motive and `joint-kss-on-inj-r-+`'s
-  --       PathP body reference the same opaque name, so type unification
-  --       between them is by-name and trivial — no cubical face checks;
-  --   (2) `Fin-fst-≡`'s body — which is `Σ≡Prop`-driven `transp` machinery
-  --       and is *not* opaque in `Cubical.Data.Fin.Properties` — gets
-  --       sealed at the `r-+-fin-bridge` boundary, instead of being
-  --       re-normalised inside `joint-kss-on-inj-r-+`'s `cong` body.
-  --
-  -- Without these two `opaque` layers, `joint-kss-on-inj-r-+` alone
-  -- typechecked in ~19s and accounted for ~75% of the entire module's
-  -- cost. With them it typechecks in ~0.3s — a ~58× speedup that brings
-  -- the module's total typecheck from ~25s to ~7s.
+  -- ℕ-path and its `Fin-fst-≡` lift as shared, named lemmas so that
+  -- `joint-C'-on-inj-r-+`'s family motive and `joint-kss-on-inj-r-+`'s
+  -- PathP body refer to the same lemma — their types then agree by name —
+  -- and the `Σ≡Prop`-driven `Fin-fst-≡` machinery is isolated behind the
+  -- `r-+-fin-bridge` boundary rather than reappearing in each consumer.
 
   opaque
     r-+-idx-bridge : (m n : ℕ) (B : Fin (m + n) → ℕ) (k : ℕ)
@@ -959,10 +945,8 @@ private
 -- `chosen-path-id↑`, then "isSetℕ swap" (recipe (c)) onto the abstract
 -- `Inj 𝓝 (⅀Assoc≃ 𝓝 1 B C)` index.
 --
--- All helpers are pulled out to top-level and wrapped in `opaque`
--- blocks. They take `B, C, ks, kss` as parameters (matching the id↑
--- context). Each `opaque` block prevents the normaliser from unfolding
--- it when typechecking a later block.
+-- All helpers are pulled out to top-level and take `B, C, ks, kss` as
+-- parameters (matching the id↑ context).
 -- ============================================================================
 
 private
@@ -979,8 +963,7 @@ private
       in cong (C fzero) (Fin-fst-≡ fst-eq)
        ∙ sym (⅀Assoc-C'-id↑-eq B C a₁)
 
-  -- Pointwise alignment for `es-path-id↑`'s `funExtDep`, pulled out so
-  -- Agda can chunk the heavy proof; `opaque` to seal the body. Two-step
+  -- Pointwise alignment for `es-path-id↑`'s `funExtDep`. Two-step
   -- chain: bridge `kss fzero a₀` to `kss fzero (fst a₁ , …)` via
   -- `Fin-fst-≡` on the input, then apply `kss-id↑-PathP` (§4) to land
   -- at the abstract `kss ∘ ⟦⅀⟧⁻¹` form. "isSetℕ swap" onto the declared
@@ -1111,8 +1094,7 @@ private
   -- The composed PathP from `lhs-id↑` to `rhs-id↑` via `outer-id↑` then
   -- `bridge-id↑`. The declared return type *names* `chosen-path-id↑`
   -- (rather than inlining its body); this lets `IExpr-assoc-id↑`'s
-  -- "isSetℕ swap" match its motive by name without unfolding
-  -- `chosen-path-id↑`. The unfolding cost is paid here, once.
+  -- "isSetℕ swap" match its motive by name.
   opaque
     unfolding chosen-path-id↑
     my-PathP-id↑ : (B : Fin 1 → ℕ) (C : (a : Fin 1) → Fin (B a) → ℕ)
@@ -1454,11 +1436,10 @@ private
                           (joint-C' m n B C)))
       ∙ (λ i → sum (sym (sum-split m n B) i) (symP (B-path-add↑ m n B C) i))
 
-  -- The four-leg composite. Uses step-A..D as opaque values, just
-  -- chained via `compPathP'`; their bodies aren't needed to typecheck
-  -- this chain. Only `chosen-path-add↑` must be unfolded so the
-  -- assembled path matches the declared return-type's path family by
-  -- definitional equality.
+  -- The four-leg composite chains `step-A..D` via `compPathP'`; the chain
+  -- depends only on their statements, not their bodies. The assembled path
+  -- matches the declared return type's path family — keyed on
+  -- `chosen-path-add↑` — by definitional equality.
   opaque
     unfolding chosen-path-add↑
 

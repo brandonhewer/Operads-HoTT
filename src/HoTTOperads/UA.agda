@@ -17,7 +17,7 @@ opaque
   -- The action of ua on a function-typed family: when ua applied to an equivalence
   -- e : X₁ ≃ X₂ appears twice to the left of the function arrow,
   -- the heterogeneous path between f : (X₁ → Y) → Z and (λ ys → f (ys ∘ fun e))
-  -- is given by ua-gluePt. Reference: Category.tex lines 119-123.
+  -- is given by ua-gluePt. Reference: Section 7 (Category of Operads).
   ua→→ : {X₁ X₂ : Type ℓ} {Y : Type ℓ'} {Z : Type ℓ''}
          (f : (X₁ → Y) → Z) (e : X₁ ≃ X₂)
        → PathP (λ i → (ua e i → Y) → Z) f (λ ys → f (ys ∘ equivFun e))

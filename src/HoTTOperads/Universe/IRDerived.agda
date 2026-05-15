@@ -2,10 +2,14 @@
 -- ============================================================================
 -- HoTTOperads.Universe.IRDerived
 --
--- "Reducible" derived universe paths used by the free-operad construction.
--- Both `⅀IdlD` and `⅀AssocD` are intentionally kept transparent: the HIT
--- `graft` proofs in `Free.HIT` rely on their bodies reducing inside
--- `subst (FreeOps K) …`, so they cannot be made `opaque`.
+-- Derived universe paths: `⅀IdlD` is the left-identity rewrite
+-- `X (invEq ⟦𝜏⟧ tt) ≡ ⅀ 𝜏 X`, and `⅀AssocD` the re-association of an
+-- iterated `⅀`, both presented as the explicit `⅀Idl`/`⅀Assoc` composites.
+--
+-- Maintenance note: `Free.HIT`'s `graft` left/right-identity and
+-- associativity proofs depend on the definitional shape of these two
+-- definitions inside `subst (FreeOps K) …`; keep their bodies as the
+-- explicit composites below rather than abstracting them.
 --
 -- No paper-numbered statements live here; the file provides infrastructure
 -- used by Section 9 (Free Operad) for the leaf/node cases of `graft`.
@@ -27,9 +31,8 @@ private
 module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
   open Universe 𝒰
 
-  -- ⅀IdlD and ⅀AssocD are kept transparent: Free/HIT.agda's graft-idl/idr/assoc
-  -- proofs rely on their bodies reducing definitionally inside `subst (FreeOps K)`
-  -- applications, so making them opaque breaks those proofs.
+  -- `⅀IdlD` / `⅀AssocD`: the path-valued left-identity and associativity
+  -- rewrites on `⅀` (see the module header for the `Free.HIT` dependency).
   ⅀IdlD : (X : El 𝜏 → Code) → X (invEq ⟦𝜏⟧ tt) ≡ ⅀ 𝜏 X
   ⅀IdlD X =
     sym (⅀Idl 𝒰 (X (invEq ⟦𝜏⟧ tt))) ∙ cong (⅀ 𝜏) const-X

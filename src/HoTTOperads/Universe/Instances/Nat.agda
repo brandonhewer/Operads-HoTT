@@ -57,9 +57,9 @@
 --       optionally chased by a `subst`/`ΣPathP` on the bound proof.
 --
 -- Formalises from the paper:
---   `𝓝 : Universe` is the concrete instance of Definition 6.1
---   (Section 6, GeneralisedUniverses) used in Section 4 (Planar Operads),
---   where `NonSymmOperad K = Operad 𝓝 K` matches Definition 4.1.
+--   `𝓝 : Universe` is the concrete instance of Definition 6.3
+--   (Section 6, Generalised Operad Universes) used in Section 4 (Planar
+--   Operads), where `NonSymmOperad K = Operad 𝓝 K` matches Definition 4.1.
 -- ============================================================================
 module HoTTOperads.Universe.Instances.Nat where
 
@@ -100,8 +100,10 @@ open import HoTTOperads.Prelude.Nat public using
   ; sum≡sum-prefix-ℕ ; inj-l-+ ; inj-r-+ ; absurd-≤? ; absurd-+-≤? )
 
 -- The unique inhabitant `fzero : Fin 1` is a contractible centre, so
--- `Fin 1 ≃ Unit`. Kept transparent: `UniverseBase.⟦𝜏⟧` reads the
--- `.equiv-proof` field to compute inverses of the identity equivalence.
+-- `Fin 1 ≃ Unit`.
+-- Maintenance note: `UniverseBase.⟦𝜏⟧` computes inverses of the identity
+-- equivalence from this equivalence's `.equiv-proof`; keep it built via
+-- `isoToEquiv` so that proof stays available.
 Fin1≃Unit : Fin 1 ≃ Unit
 Fin1≃Unit = isoToEquiv (isContr→Iso isContrFin1 (tt , λ _ → refl))
 
@@ -621,10 +623,9 @@ opaque
       fsuc-eq = Fin-fst-≡ refl
 
       -- `b` bridged from `Fin (B (suc k, p))` to `Fin ((B ∘ fsuc) (k,
-      -- pred-≤-pred p))`. Kept transparent: the recursive `fubini`
-      -- call below depends on `fst b' = fst b` reducing definitionally
-      -- (via Cubical's `transp` on Σ commuting with `fst`), which
-      -- requires Agda to see `b'`'s `subst`-body.
+      -- pred-≤-pred p))`. The recursive `fubini` call uses that
+      -- `fst b' = fst b` holds definitionally, since Cubical's `transp`
+      -- on a Σ commutes with `fst`.
       b' : Fin ((B ∘ fsuc) (k , pred-≤-pred p))
       b' = subst (λ x → Fin (B x)) fsuc-eq b
 
@@ -635,8 +636,8 @@ opaque
       -- applies the lemma to `subst Fin q b`, not `transport (cong
       -- Fin q) b`. In Cubical, `subst Fin q b` is `transp (λ i →
       -- Fin (q i)) i0 b`, which is *not* definitionally `transport
-      -- (cong Fin q) b`. Bridging the two would cost a `substRefl`
-      -- /`transportRefl` step for no real gain.
+      -- (cong Fin q) b`. Bridging the two would require an extra
+      -- `substRefl`/`transportRefl` step.
       fst-b'≡fst-b : fst b' ≡ fst b
       fst-b'≡fst-b = fst-subst-Fin (cong B fsuc-eq) b
         where

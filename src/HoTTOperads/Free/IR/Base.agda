@@ -66,7 +66,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   Fiber A = Σ[ t ∈ FreeOpsIR ] CodeOp t ≡ A
 
   -- Constructive proof that the fibres of CodeOp are h-sets.
-  -- Follows FreeOperad.tex §9, lines 180-217: the `set` constructor of
+  -- Follows Section 9 (Free Operad), Definition 9.2: the `set` constructor of
   -- FreeOpsIR is engineered so that `cong (cong CodeOp)` is invertible on
   -- parallel paths (via flipSquare), which is exactly the characterisation
   -- of `f` having h-set fibres.
@@ -119,8 +119,8 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
 
       -- The FreeOpsIR-level 2-cell witnessing αP ≡ αQ. By the IR clause
       -- `CodeOp (set ... s k l) = s l k`, we have CodeOp (γ k l) = δ k l i0
-      -- definitionally — exactly what makes `λ j → δ k l j` typecheck at
-      -- type CodeOp (γ k l) ≡ A.
+      -- definitionally — which is exactly what gives `λ j → δ k l j` the
+      -- type `CodeOp (γ k l) ≡ A`.
       γ : αP ≡ αQ
       γ = set t₁ t₂ αP αQ s
 

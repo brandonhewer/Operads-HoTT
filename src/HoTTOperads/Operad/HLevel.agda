@@ -6,7 +6,7 @@
 -- the Σ-type of (h-set family, operad on it) is a 1-groupoid.
 --
 -- Formalises from the paper:
---   Proposition 6.5 (Section 6, GeneralisedUniverses) — `isPropOperadPathP`,
+--   Proposition 6.5 (Section 6, Generalised Operad Universes) — `isPropOperadPathP`,
 --                   `isSetOperad`, and `isGroupoid-Operad-Σ`.
 --
 -- Strategy. We unfold `Operad 𝒰 K` into a Σ-presentation `OperadΣ K`.
@@ -93,7 +93,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
   isSetOperad : (K : Code → Type ℓk) → isSet (Operad 𝒰 K)
   isSetOperad K = isOfHLevelRetractFromIso 2 (OperadIsoΣ K) (isSetOperadΣ K)
 
-  -- Proposition 6.5 (Section 6, GeneralisedUniverses) — first part.
+  -- Proposition 6.5 (Section 6, Generalised Operad Universes) — first part.
   -- The heterogeneous path space between two 𝒰-operads is propositional.
   -- Proof: J on the K-path reduces to `K-path = refl`, where the PathP
   -- collapses to a path in `Operad 𝒰 K` — propositional by `isSetOperad`.
@@ -108,7 +108,7 @@ module _ {𝒰 : Universe ℓc ℓe} where
       (λ Oᴸ' → isSetOperad K Oᴷ Oᴸ')
       K-path Oᴸ
 
-  -- Proposition 6.5 (Section 6, GeneralisedUniverses) — corollary.
+  -- Proposition 6.5 (Section 6, Generalised Operad Universes) — corollary.
   -- The Σ-type of (h-set family, operad on it) is a 1-groupoid. The base
   -- `Code → hSet` is a groupoid (`isOfHLevelTypeOfHLevel`); the fibre
   -- `Operad 𝒰 (⟨ K _ ⟩)` is an h-set (`isSetOperad`), hence a groupoid.

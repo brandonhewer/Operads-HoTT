@@ -142,11 +142,10 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   -- and transporting the result back via `to`. The proof reduces along
   -- `snd ft : CodeOp _ ≡ A` (via J) and then inducts on the IR tree.
   --
-  -- We package the HIT-side RHS in an `opaque` block so that Agda's fast
-  -- reducer does not have to unfold `HIT.graft K X C (g K (set …)) …` when
-  -- type-checking the `set` clause of `graft-agreement-refl` (which would
-  -- trigger an internal error inside `Reduce.Fast` when the cube boundary is
-  -- itself a SquareP-filler).
+  -- Maintenance note: `HIT-graft-via-Fib` packages the HIT-side
+  -- right-hand side as a named lemma so the `set` clause of
+  -- `graft-agreement-refl` works with its statement rather than its
+  -- expansion of `HIT.graft K X C (g K (set …)) …`.
   -- ============================================================================
   opaque
     HIT-graft-via-Fib :

@@ -8,9 +8,9 @@
 -- equality on the (type, isFinSet) pair.
 --
 -- Formalises from the paper:
---   `𝓕 : Universe` is the concrete instance of Definition 6.1
---   (Section 6, GeneralisedUniverses) used in Section 5 (Symmetric Operads),
---   where `SymmOperad K = Operad 𝓕 K` matches Definition 5.2.
+--   `𝓕 : Universe` is the concrete instance of Definition 6.3
+--   (Section 6, Generalised Operad Universes) used in Section 5 (Symmetric
+--   Operads), where `SymmOperad K = Operad 𝓕 K` matches Definition 5.2.
 --   `FinSet` itself realises Definition 5.1.
 -- ============================================================================
 module HoTTOperads.Universe.Instances.FinSet where
@@ -38,10 +38,9 @@ private
 El-FS : FinSet ℓ → Type ℓ
 El-FS A = A .fst
 
--- Local opaque wrapper around the *expensive* FinSet-stdlib witness for Σ.
--- The recursive card-arithmetic in `isFinSetΣ`'s first projection plus the
--- truncation in its second was the dominant cost when `⅀FS A B` reduced
--- across operadic proofs; sealing the entire pair prevents that expansion.
+-- The finiteness witness for a Σ of finite sets, from the standard
+-- library's `isFinSetΣ`, packaged as one named lemma so that `⅀FS`
+-- carries a single canonical proof of `isFinSet`.
 opaque
   isFinSetΣ-op : (A : FinSet ℓ) (B : El-FS A → FinSet ℓ)
                → isFinSet (Σ[ a ∈ El-FS A ] El-FS (B a))
@@ -52,8 +51,9 @@ opaque
 ⅀FS A B = (Σ[ a ∈ El-FS A ] El-FS (B a))
         , isFinSetΣ-op A (λ a → B a)
 
--- The unit finite set. isFinSetUnit is kept transparent because downstream
--- dot-patterns on `𝜏` (e.g. `sym-idr .𝜏 id↑`) need this to reduce.
+-- The unit finite set: `Unit` together with its finiteness proof.
+-- Maintenance note: downstream dot-patterns on `𝜏` (e.g. `sym-idr .𝜏 id↑`)
+-- match against this explicit `Unit , isFinSetUnit` form; keep it concrete.
 𝜏FS : FinSet ℓ
 𝜏FS = Unit , isFinSetUnit
 
@@ -65,8 +65,10 @@ opaque
 ⟦𝜏⟧FS : El-FS 𝜏FS ≃ Unit
 ⟦𝜏⟧FS = idEquiv _
 
--- InjFS kept transparent: `Inj FinSetBase = InjFS'` and FinSet-coh's bodies
--- need InjFS to reduce to `Σ≡Prop pp ∘ ua` for the coherence types to match.
+-- `InjFS`: from an equivalence of carriers, an equality of finite sets,
+-- via `Σ≡Prop` (the finiteness proof is propositional) composed with `ua`.
+-- Maintenance note: `FinSet-coh`'s coherence proofs identify `Inj` with
+-- exactly `Σ≡Prop (λ _ → isPropIsFinSet) ∘ ua`; keep this explicit form.
 InjFS : (A B : FinSet ℓ) → El-FS A ≃ El-FS B → A ≡ B
 InjFS _ _ e = Σ≡Prop (λ _ → isPropIsFinSet) (ua e)
 
@@ -115,7 +117,7 @@ UniverseCoh.⟦⅀Assoc⟧ FinSet-coh A B C =
                        {v = ⅀FS (⅀FS A B) (UniverseBase.⅀Assoc-C' FinSetBase A B C)}
                        (ua (UniverseBase.⅀Assoc≃ FinSetBase A B C)))
 
--- Definition 6.1 instance (Section 6, GeneralisedUniverses).
+-- Definition 6.3 instance (Section 6, Generalised Operad Universes).
 -- The symmetric operad universe on Bishop-finite sets (Definition 5.1).
 𝓕 : Universe (ℓ-suc ℓ) ℓ
 Universe.base 𝓕 = FinSetBase

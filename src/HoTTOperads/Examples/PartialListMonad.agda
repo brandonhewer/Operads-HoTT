@@ -51,7 +51,8 @@ module _ {A : Type ℓ} (isSetA : isSet A) where
   pokeData x d (suc j , p) = d (j , pred-≤-pred p)
 
   -- Monadic lifting of `poke`. Bumps the arity, prepends a hole, and stores `x`
-  -- in the new slot. Matches Monads.tex lines 199-201.
+  -- in the new slot. Matches the `pokeM` lifting in Example 8.4
+  -- (Section 8, Monad over an Operad).
   pokeM : {X : Type ℓ} → X → OpM O X → OpM O X
   pokeM x (i ▷ k ▷ d) = suc i ▷ poke k ▷ pokeData x d
 
