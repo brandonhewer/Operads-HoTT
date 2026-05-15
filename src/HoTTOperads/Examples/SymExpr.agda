@@ -287,8 +287,7 @@ sym-comp _ B (add↑ {A₁} {A₂} e₁ e₂) es =
 -- Generic PathP-cong for sym-comp.  Used as the SymExpr analogue of
 -- IExpr-comp-PathP throughout the sym-assoc proof: every place we need
 -- to bridge sym-comp heterogeneously over a FinSet path goes through
--- this lemma.  Sealed `opaque` so its body doesn't re-expand sym-comp
--- at every consumer.
+-- this lemma.
 ------------------------------------------------------------------------
 private
   opaque
@@ -446,9 +445,9 @@ opaque
       composite≡⅀Idr = equivEq (funExt λ { (inl _ , _) → refl
                                           ; (inr _ , _) → refl })
 
-      -- Under opaque `isFinSetΣ-op`, Agda cannot infer Inj's `{A B : FinSet}`
-      -- implicit args from `El A ≃ El B` alone (multiple FinSets share an
-      -- underlying type), so they are spelled out at each call below.
+      -- Agda cannot infer `Inj`'s `{A B : FinSet}` implicit args from
+      -- `El A ≃ El B` alone (multiple FinSets share an underlying type),
+      -- so they are spelled out at each call below.
       Inj-Idr₁ : ⅀ A₁ (λ _ → 𝜏) ≡ A₁
       Inj-Idr₁ = Inj {A = ⅀ A₁ (λ _ → 𝜏)} {B = A₁} (⅀Idr≃ A₁)
 
@@ -478,11 +477,10 @@ opaque
                          {u = ⅀ A₁ (λ _ → 𝜏) ⊎̂ ⅀ A₂ (λ _ → 𝜏)}
                          {v = ⅀ (A₁ ⊎̂ A₂) (λ _ → 𝜏)}
                          (ua distr)))
-            -- Inlined as a path-of-paths. With isFinSetΣ-op opaque, the
-            -- surrounding FinSet types no longer reduce, and Agda fails to
-            -- solve the higher-order meta needed to apply
-            -- `cong₂ (cong₂ _⊎_)` here. The explicit `λ i → ...` form
-            -- side-steps the meta entirely.
+            -- Inlined as a path-of-paths: Agda cannot solve the
+            -- higher-order metavariable needed to apply
+            -- `cong₂ (cong₂ _⊎_)` here, so the explicit `λ i → ...`
+            -- form is used instead.
             (λ i → cong₂ _⊎_ (cong-fst-Σ≡Prop (λ _ → isPropIsFinSet)
                                   {u = ⅀ A₁ (λ _ → 𝜏)} {v = A₁}
                                   (ua (⅀Idr≃ A₁)) i)

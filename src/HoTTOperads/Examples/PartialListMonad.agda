@@ -15,12 +15,13 @@ module HoTTOperads.Examples.PartialListMonad where
 open import Cubical.Foundations.Prelude hiding (fill)
 open import Cubical.Foundations.Function using (_∘_)
 open import Cubical.Foundations.HLevels
-open import Cubical.Data.Bool using (Bool ; if_then_else_)
+open import Cubical.Data.Bool using (Bool ; true ; false ; if_then_else_)
 open import Cubical.Data.List using (List ; [] ; _∷_)
 open import Cubical.Data.List.Properties using (isOfHLevelList)
 open import Cubical.Data.Nat using (ℕ ; zero ; suc)
 open import Cubical.Data.Nat.Order using (pred-≤-pred ; ¬-<-zero)
 open import Cubical.Data.Fin using (Fin)
+open import Cubical.Data.Fin.Properties using (Fin-fst-≡)
 open import Cubical.Data.Empty using () renaming (rec to ⊥-rec)
 
 open import HoTTOperads.Universe.Base
@@ -74,3 +75,51 @@ module _ {A : Type ℓ} (isSetA : isSet A) where
     runAlg O (List A) (isOfHLevelList 0 isSetA)
             (fill⇒ isSetA)
             ((λ a → f a ∷ []) <$> select p xs)
+
+  -- ------------------------------------------------------------------------
+  -- Example 8.4 (Section 8, Monad over an Operad) — the round-trip path.
+  --
+  -- Selecting elements of `xs` and then putting them back unchanged —
+  -- filling each hole with the singleton list of its stored element —
+  -- recovers the original list. This is the paper's claim
+  -- `runAlg fill⇒ ([_] <$> select p xs) ≡ xs`.
+  --
+  -- Proof by induction on `xs`. `consM` keeps the element in the partial
+  -- list, so `fill` re-emits it (the cons case is definitional); `pokeM`
+  -- stores it in a fresh hole, so `fill` re-emits it as the head of
+  -- `[ a ] ++ …` (the poke case re-indexes the stored data along `fsuc`,
+  -- a `Fin`-first-projection identity).
+  -- ------------------------------------------------------------------------
+  private
+    isSetListA : isSet (List A)
+    isSetListA = isOfHLevelList 0 isSetA
+
+    RA : OpM O (List A) → List A
+    RA = runAlg O (List A) isSetListA (fill⇒ isSetA)
+
+    singletons : OpM O A → OpM O (List A)
+    singletons o = (λ a → a ∷ []) <$> o
+
+    -- A `consM`-prepended element is re-emitted by `fill` definitionally.
+    H-cons : (a : A) (o : OpM O A)
+           → RA (singletons (consM a o)) ≡ a ∷ RA (singletons o)
+    H-cons a (i ▷ k ▷ d) = refl
+
+    -- A `pokeM`-stored element is re-emitted as the head of its hole's
+    -- singleton fill; the remaining data is re-indexed along `fsuc`.
+    H-poke : (a : A) (o : OpM O A)
+           → RA (singletons (pokeM a o)) ≡ a ∷ RA (singletons o)
+    H-poke a (i ▷ k ▷ d) =
+      cong (a ∷_)
+        (cong (λ d' → RA (singletons (i ▷ k ▷ d')))
+              (funExt (λ j → cong d (Fin-fst-≡ refl))))
+
+  -- The round-trip identity itself (stated as in the paper).
+  select-fill-id : (p : A → Bool) (xs : List A)
+                 → runAlg O (List A) isSetListA (fill⇒ isSetA)
+                          ((λ a → a ∷ []) <$> select p xs)
+                 ≡ xs
+  select-fill-id p []       = refl
+  select-fill-id p (a ∷ as) with p a
+  ... | true  = H-poke a (select p as) ∙ cong (a ∷_) (select-fill-id p as)
+  ... | false = H-cons a (select p as) ∙ cong (a ∷_) (select-fill-id p as)

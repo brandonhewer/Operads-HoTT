@@ -68,7 +68,7 @@
 --       from 𝒰-operads to 𝒰-species at K.
 --
 -- Formalises from the paper:
---   Theorem 9.4 (Section 9, Free Operad) — `universal`.
+--   Theorem 9.5 (Section 9, Free Operad) — `universal`.
 --   Plus a free-source case of Proposition 7.2 (`morphism-≡`); the general
 --   form lives in HoTTOperads.Operad.Morphism.
 -- ============================================================================
@@ -103,7 +103,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   -- ============================================================================
   -- §1  η — unit of the adjunction
   --
-  -- Paper (Section 9, Free Operad, Theorem 9.4): η A k = (node A k (λ _ → leaf), ⅀Idr 𝒰 A).
+  -- Paper (Section 9, Free Operad, Theorem 9.5): η A k = (node A k (λ _ → leaf), ⅀Idr 𝒰 A).
   -- In the HIT presentation, `node A B k ts : FreeOps K (⅀ A B)`, so the
   -- "(_, ⅀Idr 𝒰 A)" projection becomes a `subst` along `Inj (⅀Idr≃ A)`.
   -- ============================================================================
@@ -688,7 +688,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
     -- from HoTTOperads.Operad.Morphism and reused below.
 
     -- ==========================================================================
-    -- §9  Universal property — Theorem 9.4 (Section 9, Free Operad).
+    -- §9  Universal property — Theorem 9.5 (Section 9, Free Operad).
     --
     -- Contractibility of the factorisation type. For any operad `O` on `L`
     -- and any species morphism `f : ∀ A → K A → L A`, the factorisation

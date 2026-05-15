@@ -16,6 +16,8 @@ open import HoTTOperads.Universe.Derived
 open import HoTTOperads.Universe.IRDerived
 open import HoTTOperads.Universe.Instances.Nat
 open import HoTTOperads.Universe.Instances.FinSet
+open import HoTTOperads.Universe.Instances.Type
+open import HoTTOperads.Universe.Instances.NType
 
 open import HoTTOperads.Operad.Base
 open import HoTTOperads.Operad.Morphism
@@ -29,6 +31,7 @@ open import HoTTOperads.Monad.Functor
 open import HoTTOperads.Monad.Composition
 open import HoTTOperads.Monad.Laws
 open import HoTTOperads.Monad.Algebra
+open import HoTTOperads.Monad.TwoCell
 
 open import HoTTOperads.Examples.IExpr
 open import HoTTOperads.Examples.PartialList

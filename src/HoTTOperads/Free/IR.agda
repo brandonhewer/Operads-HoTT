@@ -8,9 +8,9 @@
 -- HIT `graft` across the fiber equivalence.
 --
 -- Formalises from the paper:
---   Definition 9.2 (Section 9, Free Operad) — operadic packaging in the IR
---   presentation. Together with HoTTOperads.Free.HIT this exhibits both
---   the HIT and IR avatars of the free operad used by Theorem 9.4
+--   Definition 9.4 (Section 9, Free Operad) — the operad packaging in the
+--   IR presentation. Together with HoTTOperads.Free.HIT this exhibits both
+--   the HIT and IR avatars of the free operad used by Theorem 9.5
 --   (in HoTTOperads.Free.Universal).
 --
 -- Layout:
@@ -23,7 +23,7 @@
 --   §4   Operad laws `idl-fib`, `idr-fib`, `assoc-fib`, each obtained by
 --        applying `to` pointwise to the corresponding HIT law and rewriting
 --        the endpoints via the agreement lemma and `section`.
---   §5   Operad assembly `FreeOperad : Operad 𝒰 (FreeOps' K)`.
+--   §5   Operad assembly `FreeOperad : Operad 𝒰 (FreeOps' K)`; Definition 9.4.
 --
 -- This module also re-exports `HoTTOperads.Free.IR.Base` and
 -- `HoTTOperads.Free.IR.FiberEquiv` so downstream modules can keep importing
@@ -402,7 +402,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
                                                          (snd (equivFun (⟦⅀⟧ A B) ab))))))
 
   -- ============================================================================
-  -- §5  Operad assembly
+  -- §5  Operad assembly (Definition 9.4)
   --
   -- The free 𝒰-operad on `K`, presented on the IR fibres `FreeOps' K`. The
   -- composition `compₒ` is the direct IR `graftFib`; the laws are derived

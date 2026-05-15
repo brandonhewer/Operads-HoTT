@@ -89,6 +89,7 @@ open import Cubical.Foundations.Equiv using (equivFun)
 open import Cubical.Foundations.HLevels
 open import Cubical.Foundations.Transport using (substComposite)
 open import Cubical.Functions.FunExtEquiv using (funExtDep)
+open import Cubical.Functions.Embedding using (isEmbedding ; injEmbedding)
 open import Cubical.Data.Nat
 open import Cubical.Data.Nat.Properties using (+-zero ; +-assoc ; +-comm)
 open import Cubical.Data.Nat.Order using (_<_ ; _≤_ ; ¬-<-zero
@@ -307,6 +308,96 @@ opaque
 
   isSetIExpr : (n : ℕ) → isSet (IExpr n)
   isSetIExpr n = isOfHLevelRetract 2 f g g∘f (isSetIExprTreeΣ n)
+
+------------------------------------------------------------------------
+-- §3a  Interpretation ⟦_⟧ and its embedding (Section 3, Basic Idea).
+--
+-- The paper interprets an abstract operation `IExpr n` as a concrete
+-- n-ary function on `Expr`:
+--   ⟦ id↑ ⟧        es = es 0
+--   ⟦ val↑ k ⟧     es = val k
+--   ⟦ add↑ e₁ e₂ ⟧ es = add (⟦ e₁ ⟧ (π¹ es)) (⟦ e₂ ⟧ (π² es))
+-- where π¹ / π² project a `Fin (m + n)`-indexed argument vector onto its
+-- first `m` and last `n` slots (here `inj-l-+` / `inj-r-+`). Section 3
+-- states (without proof) that `⟦_⟧` is injective and, since
+-- `(Fin n → Expr) → Expr` is an h-set, an embedding — exhibiting
+-- `IExpr n` as a subtype of `(Fin n → Expr) → Expr`. We supply that
+-- proof here.
+--
+-- Injectivity is recovered structurally: probing `⟦ e ⟧` at the two
+-- constant environments `c0 = λ _ → val 0` and `c1 = λ _ → add (val 0)
+-- (val 0)` lets `reify₂` rebuild `forget e` — a `val↑` leaf gives the
+-- same value at both probes, an `id↑` leaf gives a `val` at `c0` but an
+-- `add` at `c1`, and an `add↑` node gives an `add` at both. Since
+-- `IExpr n` is a retract of `Σ[ t ∈ Tree ] (shape t ≡ n)` via
+-- `(f, g, g∘f)` (§2-§3), recovering `forget e` recovers `e`.
+------------------------------------------------------------------------
+⟦_⟧ : ∀ {n} → IExpr n → (Fin n → Expr) → Expr
+⟦ id↑ ⟧                es = es fzero
+⟦ val↑ k ⟧             es = val k
+⟦ add↑ {m} {n} e₁ e₂ ⟧ es =
+  add (⟦ e₁ ⟧ (λ i → es (inj-l-+ m n i)))
+      (⟦ e₂ ⟧ (λ i → es (inj-r-+ m n i)))
+
+-- `Expr` is a retract of `Tree`, hence an h-set.
+private
+  e→t : Expr → Tree
+  e→t (val k)   = Tval k
+  e→t (add x y) = Tadd (e→t x) (e→t y)
+
+  t→e : Tree → Expr
+  t→e Tid          = val 0
+  t→e (Tval k)     = val k
+  t→e (Tadd t₁ t₂) = add (t→e t₁) (t→e t₂)
+
+  t→e∘e→t : (x : Expr) → t→e (e→t x) ≡ x
+  t→e∘e→t (val k)   = refl
+  t→e∘e→t (add x y) = cong₂ add (t→e∘e→t x) (t→e∘e→t y)
+
+opaque
+  isSetExpr : isSet Expr
+  isSetExpr = isOfHLevelRetract 2 e→t t→e t→e∘e→t isSetTree
+
+-- The two probe environments and the structural decoder.
+private
+  c0 : ∀ {n} → Fin n → Expr
+  c0 _ = val 0
+
+  c1 : ∀ {n} → Fin n → Expr
+  c1 _ = add (val 0) (val 0)
+
+  reify₂ : Expr → Expr → Tree
+  reify₂ (val k)     (val _)     = Tval k
+  reify₂ (val _)     (add _ _)   = Tid
+  reify₂ (add _ _)   (val _)     = Tid
+  reify₂ (add l₁ r₁) (add l₂ r₂) = Tadd (reify₂ l₁ l₂) (reify₂ r₁ r₂)
+
+  reify : ∀ {n} → ((Fin n → Expr) → Expr) → Tree
+  reify φ = reify₂ (φ c0) (φ c1)
+
+  -- Probing `⟦ e ⟧` at `c0`/`c1` and decoding recovers `forget e`.
+  reify-forget : ∀ {n} (e : IExpr n) → reify ⟦ e ⟧ ≡ forget e
+  reify-forget id↑          = refl
+  reify-forget (val↑ k)     = refl
+  reify-forget (add↑ e₁ e₂) =
+    cong₂ Tadd (reify-forget e₁) (reify-forget e₂)
+
+-- `⟦_⟧` is injective: it determines `forget`, and `IExpr n` is a
+-- retract of `Σ[ t ∈ Tree ] (shape t ≡ n)`.
+opaque
+  ⟦⟧-inj : ∀ {n} {w x : IExpr n} → ⟦ w ⟧ ≡ ⟦ x ⟧ → w ≡ x
+  ⟦⟧-inj {n = n} {w = w} {x = x} h = sym (g∘f w) ∙ cong g f-eq ∙ g∘f x
+    where
+      forget-eq : forget w ≡ forget x
+      forget-eq = sym (reify-forget w) ∙ cong reify h ∙ reify-forget x
+
+      f-eq : f w ≡ f x
+      f-eq = Σ≡Prop (λ t → isSetℕ (shape t) n) forget-eq
+
+  -- Section 3 (Basic Idea): `⟦_⟧` is an embedding, so `IExpr n` is a
+  -- subtype of `(Fin n → Expr) → Expr`.
+  IExpr-embeds : ∀ {n} → isEmbedding (⟦_⟧ {n})
+  IExpr-embeds = injEmbedding (isSetΠ (λ _ → isSetExpr)) ⟦⟧-inj
 
 ------------------------------------------------------------------------
 -- §4  IExpr-comp: the n-ary operadic composition.
@@ -702,8 +793,7 @@ private
         -- The single-argument kss-application. `cong kss-applied
         -- (r-+-fin-bridge …)` is the entire PathP body. Both the
         -- family motive (`joint-C'-on-inj-r-+`) and this body reference
-        -- the same opaque `r-+-fin-bridge`, so Agda's type unification
-        -- is by-name and trivial — no cubical face checks required.
+        -- the same `r-+-fin-bridge` lemma, so their types agree by name.
         kss-applied : (kp' : Fin (sum n (B ∘ inj-r-+ m n)))
                     → IExpr (Universe.⅀Assoc-C' 𝓝 n (B ∘ inj-r-+ m n) (C ∘ inj-r-+ m n) kp')
         kss-applied kp' = kss (inj-r-+ m n (fst (sumFinFwd n (B ∘ inj-r-+ m n) kp')))

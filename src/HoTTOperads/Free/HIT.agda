@@ -11,9 +11,9 @@
 --
 -- Formalises from the paper:
 --   Definition 9.2 (Section 9, Free Operad) — `FreeOps K` (HIT presentation).
---   Theorem 9.4 (Section 9, Free Operad) — the operadic packaging
---   `FreeOperad` is one half of the free-forgetful adjunction (the universal
---   property is then proved in HoTTOperads.Free.Universal).
+--   Definition 9.4 (Section 9, Free Operad) — `FreeOperad`, the operad
+--   packaging of the free operad. The free-forgetful adjunction
+--   (Theorem 9.5) is then proved in HoTTOperads.Free.Universal.
 --
 -- ## File layout
 --
@@ -2247,9 +2247,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
       i j
 
   -- ============================================================================
-  -- §9  Operad assembly — the operadic packaging used by Theorem 9.4
-  -- (Section 9, Free Operad). The universal property itself is proved in
-  -- HoTTOperads.Free.Universal.
+  -- §9  Operad assembly — `FreeOperad`, the operad packaging
+  -- (Definition 9.4, Section 9, Free Operad). The free-forgetful
+  -- adjunction (Theorem 9.5) is proved in HoTTOperads.Free.Universal.
   --
   -- The free 𝒰-operad on K, assembled from `leaf`, `graft`, and the three laws.
   -- ============================================================================
