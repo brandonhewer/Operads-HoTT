@@ -1,23 +1,29 @@
 {-# OPTIONS --cubical #-}
--- Inductive-recursive presentation of the free 𝒰-operad's operations
--- (FreeOperad.tex §9, lines 144-218).
+-- ============================================================================
+-- HoTTOperads.Free.IR.Base
+--
+-- Inductive-recursive presentation of the free 𝒰-operad's operations.
 --
 -- Mutual `data`/`function`:
 --   * leaf, node are the data constructors of FreeOpsIR
---   * `set` is the paper's higher path coherence (FreeOperad.tex line 205-207):
+--   * `set` is the paper's higher path coherence:
 --       set p q : PathP (λ i → CodeOp K (p i) ≡ CodeOp K (q i)) refl refl → p ≡ q
---     This is a coherence on `cong CodeOp`, NOT a path constructor of FreeOpsIR.
---     It asserts that the fibres of `CodeOp` are h-sets (without forcing
---     FreeOpsIR itself to be an h-set).
+--     This is a coherence on `cong CodeOp`, NOT a path constructor of
+--     FreeOpsIR. It asserts that the fibres of `CodeOp` are h-sets (without
+--     forcing FreeOpsIR itself to be an h-set).
 --
 -- After the IR definition itself, this module also provides:
 --   * `Fiber A` — the fibre of `CodeOp K` over `A` (as a Σ-type).
 --   * `isSetFiberCodeOp` — the constructive proof that every fibre is an
---     h-set; the explicit `δ`-cube construction follows FreeOperad.tex
---     §9, lines 180-217.
+--     h-set; the explicit `δ`-cube construction follows the paper.
 --   * `FreeOps'` — alias `Fiber`, the family that carries the operad
 --     structure transported across the fiber equivalence (the operad
 --     itself lives in `HoTTOperads.Free.IR`).
+--
+-- Formalises from the paper:
+--   Definition 9.2 (Section 9, Free Operad) — `FreeOpsIR` / `CodeOp`.
+--   Proposition 9.3 (Section 9, Free Operad) — `isSetFiberCodeOp`.
+-- ============================================================================
 module HoTTOperads.Free.IR.Base where
 
 open import Agda.Builtin.Cubical.Path
@@ -35,6 +41,7 @@ private
 module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) where
   open Universe 𝒰
 
+  -- Definition 9.2 (Section 9, Free Operad). Mutual IR pair.
   data FreeOpsIR : Type (ℓ-max (ℓ-max ℓc ℓe) ℓk)
   CodeOp : FreeOpsIR → Code
 
@@ -72,6 +79,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   -- feeds into `set t₁ t₂ αP αQ s` to produce the FreeOpsIR-level α-path,
   -- and the IR clause `CodeOp (set ... s i j) = s j i` ties it all together
   -- definitionally.
+  -- Proposition 9.3 (Section 9, Free Operad) — fibres of `CodeOp` are h-sets.
   isSetFiberCodeOp : (A : Code) → isSet (Fiber A)
   isSetFiberCodeOp A (t₁ , p₁) (t₂ , p₂) P Q k l =
     γ k l , (λ j → δ k l j)

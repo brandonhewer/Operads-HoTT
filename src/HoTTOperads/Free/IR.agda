@@ -4,8 +4,14 @@
 --
 -- Operad structure on the inductive-recursive free operad
 -- `FreeOps' K A = Fiber K A`, with `compₒ` defined as the *direct* IR
--- `graft` (FreeOperad.tex §9 lines 280-294) — not as a transport of the HIT
--- `graft` across the fiber equivalence.
+-- `graft` (Section 9, Free Operad in the paper) — not as a transport of the
+-- HIT `graft` across the fiber equivalence.
+--
+-- Formalises from the paper:
+--   Definition 9.2 (Section 9, Free Operad) — operadic packaging in the IR
+--   presentation. Together with HoTTOperads.Free.HIT this exhibits both
+--   the HIT and IR avatars of the free operad used by Theorem 9.4
+--   (in HoTTOperads.Free.Universal).
 --
 -- Layout:
 --   §1   Direct IR graft `graftFib`, defined by structural recursion on the
@@ -52,7 +58,7 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
   -- ============================================================================
   -- §1  Direct IR graft
   --
-  -- `graft t C tss` is the paper's `graft` (FreeOperad.tex 280-294) at
+  -- `graft t C tss` is the paper's `graft` (Section 9, Free Operad) at
   -- index `CodeOp t`. It is defined by structural recursion on `t`, with the
   -- `set` case filled by `isSet→SquareP` after η-expansion in the (C, tss)
   -- arguments — the result type at each cube vertex is a Π-into-`Fiber`,

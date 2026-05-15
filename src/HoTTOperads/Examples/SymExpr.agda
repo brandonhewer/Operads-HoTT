@@ -1,4 +1,16 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Examples.SymExpr
+--
+-- The symmetric expression family `SymExpr : FinSet → Type₁` and its
+-- structure as a `𝓕`-operad. The composition map is defined using the
+-- canonical FinSet-level identity/coproduct equivalences (∅̂-Σ-path,
+-- 𝜏-Σ-path, ⊎̂-distr-path).
+--
+-- Formalises from the paper:
+--   Example 5.3 (Section 5, Symmetric Operads) — `SymExpr`,
+--   `SymExprOperad`.
+-- ============================================================================
 module HoTTOperads.Examples.SymExpr where
 
 open import Cubical.Foundations.Prelude
@@ -92,6 +104,7 @@ opaque
   ⊎̂-distr-path A₁ A₂ B = un _ _ (isoToEquiv (distr-iso A₁ A₂ B))
 
 ------------------------------------------------------------------------
+-- Example 5.3 (Section 5, Symmetric Operads).
 -- A symmetric analogue of IExpr, indexed by FinSet rather than ℕ.
 -- val↑ at the empty FinSet matches the paper's convention (and the
 -- IExpr.val↑ : IExpr 0 analogy); add↑ is the new binary constructor.
@@ -1435,6 +1448,7 @@ opaque
       (sym-assoc A₁ (B ∘ inl) (C ∘ inl) e₁ (ks ∘ inl) (λ a → kss (inl a)))
       (sym-assoc A₂ (B ∘ inr) (C ∘ inr) e₂ (ks ∘ inr) (λ a → kss (inr a)))
 
+-- Example 5.3 (Section 5, Symmetric Operads) — the symmetric operad on `SymExpr`.
 SymExprOperad : SymmOperad SymExpr
 Operad.isSetK SymExprOperad = isSetSymExpr
 Operad.id     SymExprOperad = id↑

@@ -1,4 +1,15 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Examples.PartialList
+--
+-- The partial-list family `PartialList A : ℕ → Type` (lists with `poke` holes)
+-- and its planar operad structure with composition substituting each hole
+-- by a sub-list.
+--
+-- Formalises from the paper:
+--   Example 4.2 (Section 4, Planar Operads) — `PartialList A`,
+--   `PartialListOperad A`.
+-- ============================================================================
 module HoTTOperads.Examples.PartialList where
 
 open import Cubical.Foundations.Prelude
@@ -27,6 +38,7 @@ private
   variable
     ℓ : Level
 
+-- Example 4.2 (Section 4, Planar Operads).
 -- Partial lists indexed by the number of holes (`poke`s).
 data PartialList (A : Type ℓ) : ℕ → Type ℓ where
   []   : PartialList A 0
@@ -601,7 +613,7 @@ opaque
   pl-assoc A m ms mss k ks kss = pl-assoc-aux m ms mss k ks kss
 
 ------------------------------------------------------------------------
--- The PartialList operad.
+-- The PartialList operad — Example 4.2 (Section 4, Planar Operads).
 ------------------------------------------------------------------------
 PartialListOperad : (A : Type ℓ) → isSet A → NonSymmOperad (PartialList A)
 Operad.isSetK (PartialListOperad A isSetA) = isSetPartialList isSetA

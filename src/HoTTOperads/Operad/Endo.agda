@@ -1,7 +1,17 @@
 {-# OPTIONS --cubical #-}
--- The idl/idr/assoc laws for Endo. The straight-line construction below uses
--- `subst` over the universe coherences (⟦⅀Idl⟧, ⟦⅀Idr⟧, ⟦⅀Assoc⟧) plus the
--- `ua→→inv` lemma — see Category.tex §6 (paper) and src/HoTTOperads/UA.agda.
+-- ============================================================================
+-- HoTTOperads.Operad.Endo
+--
+-- The endomorphism operad `Endo 𝒰 X` on an h-set `X`. Operations at code `A`
+-- are functions `(El A → X) → X`; the unit is evaluation at the unique
+-- argument of `El 𝜏`; composition is function composition. The three
+-- operadic laws are discharged by `subst` over the universe coherences
+-- (⟦⅀Idl⟧, ⟦⅀Idr⟧, ⟦⅀Assoc⟧) plus the `ua→→inv` lemma in
+-- src/HoTTOperads/UA.agda.
+--
+-- Formalises from the paper:
+--   Definition 7.3 (Section 7, Category of Operads) — `Endo 𝒰 X`.
+-- ============================================================================
 module HoTTOperads.Operad.Endo where
 
 open import Cubical.Foundations.Prelude
@@ -175,6 +185,8 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) {X : Type ℓ} (isSetX 
         path-ua : PathP (λ i → (ua (⅀Assoc≃ A B C) i → X) → X) lhs rhs
         path-ua = lhs-eq ◁ ua→→inv (⅀Assoc≃ A B C) rhs
 
+  -- Definition 7.3 (Section 7, Category of Operads).
+  -- The endomorphism operad on `X` packaged as an `Operad 𝒰 EndoOps`.
   Endo : Operad 𝒰 EndoOps
   Operad.isSetK Endo = isSetEndoOps
   Operad.id     Endo = Endo-id

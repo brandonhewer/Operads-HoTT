@@ -1,4 +1,7 @@
 {-# OPTIONS --cubical #-}
+-- Arithmetic / `Fin` / `sum` utilities used by HoTTOperads.Universe.Instances.Nat
+-- and the IExpr / PartialList examples. Supports Section 4 (Planar Operads);
+-- no paper-numbered content lives here directly.
 module HoTTOperads.Prelude.Nat where
 
 open import Cubical.Foundations.Prelude

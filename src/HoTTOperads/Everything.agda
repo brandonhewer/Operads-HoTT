@@ -20,6 +20,7 @@ open import HoTTOperads.Universe.Instances.FinSet
 open import HoTTOperads.Operad.Base
 open import HoTTOperads.Operad.Morphism
 open import HoTTOperads.Operad.Endo
+open import HoTTOperads.Operad.HLevel
 open import HoTTOperads.Operad.Specialised.NonSymm
 open import HoTTOperads.Operad.Specialised.Symm
 
@@ -31,6 +32,7 @@ open import HoTTOperads.Monad.Algebra
 
 open import HoTTOperads.Examples.IExpr
 open import HoTTOperads.Examples.PartialList
+open import HoTTOperads.Examples.PartialListAlgebra
 open import HoTTOperads.Examples.PartialListMonad
 open import HoTTOperads.Examples.SymExpr
 open import HoTTOperads.Examples.Associative

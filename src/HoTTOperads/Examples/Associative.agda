@@ -1,6 +1,11 @@
 {-# OPTIONS --cubical #-}
--- The Associative operad: operations are the unit type at every index. Uniform over
--- any generalised operad universe.
+-- ============================================================================
+-- HoTTOperads.Examples.Associative
+--
+-- The Associative operad: operations are the unit type at every index.
+-- Uniform over any generalised operad universe. Not numbered in the paper —
+-- a "smallest non-trivial example" included for the library.
+-- ============================================================================
 module HoTTOperads.Examples.Associative where
 
 open import Cubical.Foundations.Prelude

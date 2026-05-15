@@ -1,4 +1,18 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Universe.Instances.FinSet
+--
+-- The symmetric operad universe `𝓕 : Universe ℓ-zero ℓ-zero` on Bishop-finite
+-- sets: codes are `FinSet`, interpretation is the carrier projection, ⅀ is
+-- the Σ-of-finite-sets, 𝜏 is `Unit`, and `Inj` is the Σ≡Prop-induced
+-- equality on the (type, isFinSet) pair.
+--
+-- Formalises from the paper:
+--   `𝓕 : Universe` is the concrete instance of Definition 6.1
+--   (Section 6, GeneralisedUniverses) used in Section 5 (Symmetric Operads),
+--   where `SymmOperad K = Operad 𝓕 K` matches Definition 5.2.
+--   `FinSet` itself realises Definition 5.1.
+-- ============================================================================
 module HoTTOperads.Universe.Instances.FinSet where
 
 open import Cubical.Foundations.Prelude
@@ -101,6 +115,8 @@ UniverseCoh.⟦⅀Assoc⟧ FinSet-coh A B C =
                        {v = ⅀FS (⅀FS A B) (UniverseBase.⅀Assoc-C' FinSetBase A B C)}
                        (ua (UniverseBase.⅀Assoc≃ FinSetBase A B C)))
 
+-- Definition 6.1 instance (Section 6, GeneralisedUniverses).
+-- The symmetric operad universe on Bishop-finite sets (Definition 5.1).
 𝓕 : Universe (ℓ-suc ℓ) ℓ
 Universe.base 𝓕 = FinSetBase
 Universe.coh  𝓕 = FinSet-coh

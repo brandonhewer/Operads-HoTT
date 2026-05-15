@@ -1,4 +1,7 @@
 {-# OPTIONS --cubical #-}
+-- Univalence-derived lemmas (`ua→→`, `ua→→inv`) used in the operadic-law
+-- proofs of HoTTOperads.Operad.Endo. Supporting infrastructure for
+-- Section 7 (Category of Operads); no paper-numbered content.
 module HoTTOperads.UA where
 
 open import Cubical.Foundations.Prelude

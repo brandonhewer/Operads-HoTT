@@ -1,9 +1,17 @@
 {-# OPTIONS --cubical #-}
--- Constructive proofs of the three monad laws for OpM O.
--- The same skeleton as Endo-idl / Endo-idr / Endo-assoc in HoTTOperads.Operad.Endo:
--- each law is a triple of paths on Index, Op, Data, with the Data path discharged
--- via subst over the universe coherence (⟦⅀Idl⟧ / ⟦⅀Idr⟧ / ⟦⅀Assoc⟧) plus
--- ua-ungluePathExt.
+-- ============================================================================
+-- HoTTOperads.Monad.Laws
+--
+-- Constructive proofs of the three monad laws for `OpM O`. Each law follows
+-- the same skeleton as Endo-idl/Endo-idr/Endo-assoc in
+-- HoTTOperads.Operad.Endo: a triple of paths on `Index`, `Op`, `Data`, with
+-- the `Data` path discharged via subst over a universe coherence (⟦⅀Idl⟧,
+-- ⟦⅀Idr⟧, or ⟦⅀Assoc⟧) plus `ua-ungluePathExt`.
+--
+-- Formalises from the paper:
+--   Theorem 8.2 (Section 8, Monad over an Operad) — monad-law part of
+--   `OpM O` being a monad on h-sets.
+-- ============================================================================
 module HoTTOperads.Monad.Laws where
 
 open import Cubical.Foundations.Prelude hiding (J)
@@ -27,7 +35,7 @@ module _ {𝒰 : Universe ℓc ℓe} {K : Universe.Code 𝒰 → Type ℓk} (O :
   open Operad O
 
   opaque
-    -- Left unit law.
+    -- Theorem 8.2 (left unit law).
     -- Both sides are OpM O X. After reducing join (return x) the LHS data field
     -- becomes (λ ab → D (snd (⟦⅀⟧ 𝜏 (λ _ → I) ab))), which is definitionally
     -- D ∘ equivFun (⅀Idl≃ I) because ⅀Idl≃ collapses to (snd ∘ ⟦⅀⟧ 𝜏 _) under η.
@@ -44,7 +52,7 @@ module _ {𝒰 : Universe ℓc ℓe} {K : Universe.Code 𝒰 → Type ℓk} (O :
         data-path : PathP (λ i → El (Inj (⅀Idl≃ I) i) → X) lhs D
         data-path = subst (λ p → PathP (λ i → p i → X) lhs D) (⟦⅀Idl⟧ I) path-ua
 
-    -- Right unit law.
+    -- Theorem 8.2 (right unit law).
     -- After reducing join (return <$> x) the LHS data field becomes
     -- (λ ab → D (fst (⟦⅀⟧ I (λ _ → 𝜏) ab))) = D ∘ equivFun (⅀Idr≃ I) definitionally.
     join-return₂ : {X : Type ℓx} (x : OpM O X) → join O (return O <$> x) ≡ x
@@ -60,7 +68,7 @@ module _ {𝒰 : Universe ℓc ℓe} {K : Universe.Code 𝒰 → Type ℓk} (O :
         data-path : PathP (λ i → El (Inj (⅀Idr≃ I) i) → X) lhs D
         data-path = subst (λ p → PathP (λ i → p i → X) lhs D) (⟦⅀Idr⟧ I) path-ua
 
-    -- Associativity.
+    -- Theorem 8.2 (associativity of join).
     -- Natural direction of ⅀Assoc≃ / Operad.assoc is nested-right → nested-left.
     --   join ((join O) <$> y)  is nested-right
     --   join (join y)          is nested-left

@@ -1,7 +1,12 @@
 {-# OPTIONS --cubical #-}
--- The Commutative operad: operations are the unit type at every index. Uniform over
--- any generalised operad universe. (Identical structure to Associative; the difference
--- in semantics is intentional and degenerate at this h-level.)
+-- ============================================================================
+-- HoTTOperads.Examples.Commutative
+--
+-- The Commutative operad: operations are the unit type at every index.
+-- Uniform over any generalised operad universe. (Identical structure to
+-- Associative; the difference in semantics is intentional and degenerate at
+-- this h-level.) Not numbered in the paper.
+-- ============================================================================
 module HoTTOperads.Examples.Commutative where
 
 open import Cubical.Foundations.Prelude

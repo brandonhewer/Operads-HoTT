@@ -1,4 +1,6 @@
 {-# OPTIONS --cubical #-}
+-- Path-related utilities used in the operadic-law proofs throughout the
+-- library. Supporting infrastructure; no paper-numbered content.
 module HoTTOperads.Prelude.Path where
 
 open import Cubical.Foundations.Prelude public

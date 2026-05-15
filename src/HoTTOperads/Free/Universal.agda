@@ -2,9 +2,9 @@
 -- ============================================================================
 -- HoTTOperads.Free.Universal
 --
--- Constructive proof of the free-forgetful adjunction (FreeOperad.tex §9,
--- Theorem `thm:free-universal`). For each operad O on L and every species
--- morphism f : ∀ A → K A → L A, we exhibit:
+-- Constructive proof of the free-forgetful adjunction (Section 9, Free Operad).
+-- For each operad O on L and every species morphism
+-- f : ∀ A → K A → L A, we exhibit:
 --
 --   * η     — unit of the adjunction at K
 --   * interpret O f — operad morphism FreeOperad K ⇒ O extending f along η
@@ -66,6 +66,11 @@
 --       with center `(interpret O f , η-correct)`. Establishes the universal
 --       property of `FreeOperad K` as left adjoint to the forgetful functor
 --       from 𝒰-operads to 𝒰-species at K.
+--
+-- Formalises from the paper:
+--   Theorem 9.4 (Section 9, Free Operad) — `universal`.
+--   Plus a free-source case of Proposition 7.2 (`morphism-≡`); the general
+--   form lives in HoTTOperads.Operad.Morphism.
 -- ============================================================================
 module HoTTOperads.Free.Universal where
 
@@ -679,30 +684,15 @@ module _ {𝒰 : Universe ℓc ℓe} (K : Universe.Code 𝒰 → Type ℓk) wher
                  → (λ A t → _⇒_.⟪_⟫ g A t) ≡ (λ A t → interp A t)
     agree-funExt g g-on-η = funExt (λ A → funExt (agree g g-on-η A))
 
-    -- Σ-extensionality for operad morphisms: two morphisms with equal
-    -- underlying maps are equal. The `on-id` and `on-comp` fields are
-    -- propositions (paths in the h-set `L _`), so they auto-cohere.
-    morphism-≡ : (g h : FreeOperad {𝒰 = 𝒰} K ⇒ O)
-               → ((A : Code) (t : FreeOps {𝒰 = 𝒰} K A) → _⇒_.⟪_⟫ g A t ≡ _⇒_.⟪_⟫ h A t)
-               → g ≡ h
-    _⇒_.⟪_⟫     (morphism-≡ g h eq i) A t = eq A t i
-    _⇒_.on-id   (morphism-≡ g h eq i) =
-      isProp→PathP (λ i' → isSet-L 𝜏 (eq 𝜏 leaf i') id-O)
-                    (_⇒_.on-id g) (_⇒_.on-id h) i
-    _⇒_.on-comp (morphism-≡ g h eq i) A B k₀ ts =
-      isProp→PathP (λ i' → isSet-L (⅀ A B) (eq (⅀ A B) (graft K A B k₀ ts) i')
-                                            (comp-O A B (eq A k₀ i')
-                                                        (λ a → eq (B a) (ts a) i')))
-                    (_⇒_.on-comp g A B k₀ ts)
-                    (_⇒_.on-comp h A B k₀ ts) i
+    -- The Σ-extensionality lemma `morphism-≡` (Proposition 7.2) is imported
+    -- from HoTTOperads.Operad.Morphism and reused below.
 
     -- ==========================================================================
-    -- §9  Universal property — contractibility of the factorisation type.
+    -- §9  Universal property — Theorem 9.4 (Section 9, Free Operad).
     --
-    -- This `isContr` statement is the *categorical* universal property of the
-    -- free operad: for any operad `O` on `L` and any species morphism
-    -- `f : ∀ A → K A → L A`, the factorisation `(g, g ∘ η ≡ f)` is unique
-    -- up to (proof-irrelevant) propositional equality. Equivalently,
+    -- Contractibility of the factorisation type. For any operad `O` on `L`
+    -- and any species morphism `f : ∀ A → K A → L A`, the factorisation
+    -- `(g, g ∘ η ≡ f)` is unique up to propositional equality. Equivalently,
     -- `(FreeOperad K ⇒ O)` is naturally equivalent to species morphisms
     -- `K → U(O)`, exhibiting `FreeOperad` as left adjoint to the forgetful
     -- functor `U` from 𝒰-operads to 𝒰-species.

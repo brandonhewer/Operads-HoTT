@@ -6,8 +6,14 @@
 -- inductive family `FreeOps K : Code → Type`. Operadic composition is `graft`,
 -- and we discharge the three coherence laws (left identity, right identity,
 -- associativity) constructively in Cubical Agda. The construction follows
--- FreeOperad.tex §9 (lines 87-118); the recipe below names the patterns used
+-- the paper (Section 9, Free Operad); the recipe below names the patterns used
 -- pervasively in the associativity proof.
+--
+-- Formalises from the paper:
+--   Definition 9.2 (Section 9, Free Operad) — `FreeOps K` (HIT presentation).
+--   Theorem 9.4 (Section 9, Free Operad) — the operadic packaging
+--   `FreeOperad` is one half of the free-forgetful adjunction (the universal
+--   property is then proved in HoTTOperads.Free.Universal).
 --
 -- ## File layout
 --
@@ -73,12 +79,11 @@ module _ {𝒰 : Universe ℓc ℓe} where
   open Universe 𝒰
 
   -- ============================================================================
-  -- §2  The free operad as a HIT
+  -- §2  The free operad as a HIT — Definition 9.2 (Section 9, Free Operad).
   --
   -- `FreeOps K A` is the type of K-labelled trees with leaves indexed by `El 𝜏`
   -- and indexed branching by `⅀`-pairs, quotiented by the `set` truncation that
-  -- forces every fibre to be an h-set. The three constructors match the
-  -- presentation in FreeOperad.tex §9.
+  -- forces every fibre to be an h-set.
   -- ============================================================================
   data FreeOps (K : Code → Type ℓk) : Code → Type (ℓ-max (ℓ-max ℓc ℓe) ℓk) where
     leaf : FreeOps K 𝜏
@@ -2242,7 +2247,9 @@ module _ {𝒰 : Universe ℓc ℓe} where
       i j
 
   -- ============================================================================
-  -- §9  Operad assembly
+  -- §9  Operad assembly — the operadic packaging used by Theorem 9.4
+  -- (Section 9, Free Operad). The universal property itself is proved in
+  -- HoTTOperads.Free.Universal.
   --
   -- The free 𝒰-operad on K, assembled from `leaf`, `graft`, and the three laws.
   -- ============================================================================

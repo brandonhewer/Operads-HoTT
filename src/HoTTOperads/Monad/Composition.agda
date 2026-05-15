@@ -1,4 +1,14 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Monad.Composition
+--
+-- Unit (`return`), Kleisli composition (`compM`), and multiplication
+-- (`join`) for the monad `OpM O`.
+--
+-- Formalises from the paper:
+--   Theorem 8.2 (Section 8, Monad over an Operad) — unit/join part of
+--   `OpM O` being a monad.
+-- ============================================================================
 module HoTTOperads.Monad.Composition where
 
 open import Cubical.Foundations.Prelude
@@ -18,7 +28,7 @@ module _ {𝒰 : Universe ℓc ℓe} {K : Universe.Code 𝒰 → Type ℓk} (O :
   open Universe 𝒰
   open Operad O
 
-  -- Unit: store an element at the output of the unit operation.
+  -- Theorem 8.2 (unit). Store an element at the output of the unit operation.
   return : {X : Type ℓx} → X → OpM O X
   return x = 𝜏 ▷ id ▷ (λ _ → x)
 
@@ -36,6 +46,6 @@ module _ {𝒰 : Universe ℓc ℓe} {K : Universe.Code 𝒰 → Type ℓk} (O :
       ▷ (λ ab → let (a , b) = equivFun (⟦⅀⟧ i (λ a → Index (next a))) ab
                 in  Data (next a) b)
 
-  -- Join: ordinary monadic multiplication.
+  -- Theorem 8.2 (multiplication). Ordinary monadic `join`.
   join : {X : Type ℓx} → OpM O (OpM O X) → OpM O X
   join o = compM o (λ _ x → x)

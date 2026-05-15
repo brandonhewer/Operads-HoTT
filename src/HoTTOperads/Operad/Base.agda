@@ -1,4 +1,18 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Operad.Base
+--
+-- The record of a generalised 𝒰-operad on a family of h-sets
+-- K : Code 𝒰 → Type ℓk: unit + dependent composition + the three operadic
+-- laws stated as heterogeneous paths over the universe's `Inj` images of
+-- the ⅀-identity/associativity equivalences.
+--
+-- Formalises from the paper:
+--   Definition 6.4 (Section 6, GeneralisedUniverses) — the `Operad` record.
+-- When 𝒰 = 𝓝 this specialises to Definition 4.1 (planar operad,
+-- Section 4); when 𝒰 = 𝓕 it specialises to Definition 5.2 (symmetric
+-- operad, Section 5).
+-- ============================================================================
 module HoTTOperads.Operad.Base where
 
 open import Cubical.Foundations.Prelude
@@ -11,13 +25,15 @@ private
   variable
     ℓc ℓe ℓk : Level
 
+-- Definition 6.4 (Section 6, GeneralisedUniverses).
 -- A generalised 𝒰-operad on a family of h-sets K : Code 𝒰 → Type ℓk.
 -- The fields encode:
---   id   : the unit operation at the unit code 𝜏,
---   compₒ : n-ary compₒosition with respect to ⅀ A B,
---   idl  : left identity (heterogeneous path over Inj (⅀Idl≃)),
---   idr  : right identity (heterogeneous path over Inj (⅀Idr≃)),
---   assoc: associativity (heterogeneous path over Inj (⅀Assoc≃)).
+--   isSetK : every K A is an h-set (paper hypothesis),
+--   id     : the unit operation at the unit code 𝜏,
+--   compₒ  : n-ary composition with respect to ⅀ A B,
+--   idl    : left identity (heterogeneous path over Inj (⅀Idl≃)),
+--   idr    : right identity (heterogeneous path over Inj (⅀Idr≃)),
+--   assoc  : associativity (heterogeneous path over Inj (⅀Assoc≃)).
 record Operad {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) (K : Universe.Code 𝒰 → Type ℓk)
               : Type (ℓ-max (ℓ-max ℓc ℓe) ℓk) where
   open Universe 𝒰

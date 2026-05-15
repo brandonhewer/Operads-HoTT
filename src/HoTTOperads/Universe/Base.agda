@@ -1,4 +1,24 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Universe.Base
+--
+-- The notion of a *generalised operad universe* — the abstract data of codes
+-- for arities plus a coherent dependent-sum/unit/injectivity structure that
+-- replaces ℕ-with-Fin (planar case) or FinSet-with-El (symmetric case) in a
+-- single uniform definition.
+--
+-- The record is built in three steps:
+--   `UniverseBase`  — codes, interpretation, ⅀, 𝜏, ⟦⅀⟧, ⟦𝜏⟧, Inj, InjComp.
+--   `UniverseCoh`   — the three path-level closure laws (⟦⅀Idl⟧, ⟦⅀Idr⟧,
+--                     ⟦⅀Assoc⟧) coherent with `Inj`.
+--   `Universe`      — base + coherences.
+--
+-- Formalises from the paper:
+--   Definition 6.1 (Section 6, GeneralisedUniverses) — `Universe`,
+--                                                       built from
+--                                                       `UniverseBase` and
+--                                                       `UniverseCoh`.
+-- ============================================================================
 module HoTTOperads.Universe.Base where
 
 open import Cubical.Foundations.Prelude
@@ -25,7 +45,10 @@ private
 Σ-idr-≃ : {A : Type ℓ} → (Σ[ _ ∈ A ] Unit) ≃ A
 Σ-idr-≃ = isoToEquiv (iso fst (λ a → a , tt) (λ _ → refl) (λ _ → refl))
 
--- Step 1: the base universe structure (without the three coherence laws).
+-- Definition 6.1, part 1 (Section 6, GeneralisedUniverses).
+-- The base universe structure: codes, interpretation, dependent-sum/unit
+-- formers with their interpretation equivalences, and a `Inj` map from
+-- equivalences of underlying types to paths between codes.
 record UniverseBase (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) where
   field
     Code : Type ℓc
@@ -101,7 +124,10 @@ record UniverseBase (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) whe
         p : equivFun (⅀Idr≃ A) x ≡ a
         p = cong tail (secEq (⟦⅀⟧ A (λ _ → 𝜏)) (a , invEq ⟦𝜏⟧ tt))
 
--- Step 2: the coherence predicate over a UniverseBase.
+-- Definition 6.1, part 2 (Section 6, GeneralisedUniverses).
+-- The three path-level closure laws ⟦⅀Idl⟧, ⟦⅀Idr⟧, ⟦⅀Assoc⟧ saying that the
+-- canonical type-level Σ-identity/associativity equivalences are realised by
+-- `Inj` applied to the corresponding code-level equivalences.
 record UniverseCoh {ℓc ℓe : Level} (𝒰 : UniverseBase ℓc ℓe) : Type (ℓ-suc (ℓ-max ℓc ℓe)) where
   open UniverseBase 𝒰
   field
@@ -114,7 +140,8 @@ record UniverseCoh {ℓc ℓe : Level} (𝒰 : UniverseBase ℓc ℓe) : Type (�
                             {B = ⅀ (⅀ A B) (⅀Assoc-C' A B C)}
                             (⅀Assoc≃ A B C))
 
--- Step 3: the full Universe is a base plus coherences.
+-- Definition 6.1 (Section 6, GeneralisedUniverses).
+-- A generalised operad universe = `UniverseBase` plus `UniverseCoh`.
 record Universe (ℓc ℓe : Level) : Type (ℓ-suc (ℓ-max ℓc ℓe)) where
   field
     base : UniverseBase ℓc ℓe

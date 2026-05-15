@@ -80,6 +80,11 @@
 -- `let`-blocks are themselves wrapped in `opaque` to seal one-shot
 -- normalisations; proof-of-`<` propositions are kept transparent since
 -- `isProp≤`/`isProp→PathP` already black-box them.
+--
+-- Formalises from the paper:
+--   Section 3 (Basic Idea) — the motivating IExpr family and its operad
+--   structure. The paper does not number this construction (it is informal
+--   in §3), so this module supplies the formal counterpart.
 -- ============================================================================
 module HoTTOperads.Examples.IExpr where
 
@@ -124,8 +129,9 @@ data Expr : Type where
   val : ℕ → Expr
   add : Expr → Expr → Expr
 
--- The abstract operations as an inductive family indexed by arity. An
--- `IExpr n` is a syntactic operation with `n` named input slots:
+-- Section 3 (Basic Idea) — the abstract operations as an inductive family
+-- indexed by arity. An `IExpr n` is a syntactic operation with `n` named
+-- input slots:
 --   `id↑`     — the singleton-input identity (slot count 1).
 --   `val↑ k`  — the constant `val k` (slot count 0).
 --   `add↑ e₁ e₂` — adds the values returned by `e₁` and `e₂`, with the
@@ -1561,7 +1567,7 @@ opaque
 -- §12  Operad assembly: `IExprOperad`.
 --
 -- Bundle the components into the `Operad 𝓝 IExpr = NonSymmOperad IExpr`
--- record. This is the public API of the module.
+-- record (Section 3, Basic Idea). This is the public API of the module.
 -- ============================================================================
 IExprOperad : NonSymmOperad IExpr
 Operad.isSetK IExprOperad = isSetIExpr

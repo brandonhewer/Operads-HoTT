@@ -1,4 +1,17 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Universe.Derived
+--
+-- Derived data and coherence lemmas for any `Universe`: path-valued forms of
+-- the canonical equivalences (⅀Idl, ⅀Idr, ⅀Assoc via Inj), the two `Inj`
+-- coherence lemmas, and supporting h-prop facts about El 𝜏 / El (⅀ 𝜏 𝜏).
+--
+-- Formalises from the paper (Section 6, GeneralisedUniverses):
+--   Proposition 6.2 — `InjRefl`
+--   Proposition 6.3 — `InjSec`
+-- Plus derived path/h-prop infrastructure for Definition 6.1 used
+-- throughout the rest of the library.
+-- ============================================================================
 module HoTTOperads.Universe.Derived where
 
 open import Cubical.Foundations.Prelude
@@ -54,7 +67,8 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
       sym p ∙ p                 ≡⟨ lCancel p ⟩
       refl                      ∎
 
-    -- Inj sends the identity equivalence to refl, up to a path.
+    -- Proposition 6.2 (Section 6, GeneralisedUniverses).
+    -- Inj sends the identity equivalence to refl.
     InjRefl : (A : Code) → Inj (idEquiv (El A)) ≡ refl
     InjRefl A =
       let e = idEquiv (El A)
@@ -82,10 +96,11 @@ module _ {ℓc ℓe : Level} (𝒰 : Universe ℓc ℓe) where
                  ∙ cong Inj (invEquiv-is-rinv e)
                  ∙ InjRefl A
 
-    -- Paper-grade InjSec: every path in Code is recovered as Inj of the
-    -- corresponding equivalence. Provable from InjRefl by path induction:
-    -- at refl, cong El reduces to refl and pathToEquiv refl ≡ idEquiv, so
-    -- Inj (pathToEquiv (cong El refl)) ≡ Inj (idEquiv) ≡ refl.
+    -- Proposition 6.3 (Section 6, GeneralisedUniverses).
+    -- Every path in `Code` is recovered as `Inj` of the corresponding
+    -- equivalence. Proof by path induction: at refl, cong El reduces to refl,
+    -- pathToEquiv refl ≡ idEquiv, so Inj (pathToEquiv (cong El refl)) ≡
+    -- Inj (idEquiv) ≡ refl by InjRefl.
     InjSec : {A B : Code} (p : A ≡ B) → Inj (pathToEquiv (cong El p)) ≡ p
     InjSec {A = A} = J (λ B' p' → Inj (pathToEquiv (cong El p')) ≡ p')
                        (cong Inj pathToEquivRefl ∙ InjRefl A)

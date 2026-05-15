@@ -1,4 +1,15 @@
 {-# OPTIONS --cubical #-}
+-- ============================================================================
+-- HoTTOperads.Universe.IRDerived
+--
+-- "Reducible" derived universe paths used by the free-operad construction.
+-- Both `⅀IdlD` and `⅀AssocD` are intentionally kept transparent: the HIT
+-- `graft` proofs in `Free.HIT` rely on their bodies reducing inside
+-- `subst (FreeOps K) …`, so they cannot be made `opaque`.
+--
+-- No paper-numbered statements live here; the file provides infrastructure
+-- used by Section 9 (Free Operad) for the leaf/node cases of `graft`.
+-- ============================================================================
 module HoTTOperads.Universe.IRDerived where
 
 open import Cubical.Foundations.Prelude

@@ -1,4 +1,8 @@
 {-# OPTIONS --cubical #-}
+-- Bishop-finite set utilities used in HoTTOperads.Universe.Instances.FinSet.
+-- Re-exports `FinSet` and provides path-injectivity helpers via Σ≡Prop.
+-- Supports Section 5 (Symmetric Operads); Definition 5.1 lives in the
+-- Cubical std lib and is re-exported here.
 module HoTTOperads.Prelude.FinSet where
 
 open import Cubical.Foundations.Prelude

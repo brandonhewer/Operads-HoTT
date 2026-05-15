@@ -55,6 +55,11 @@
 --       `Fin-fst-≡ refl` on each input; the bridge is always
 --       `cong B (Fin-fst-≡ refl)` lifted to a `funExt` over the family,
 --       optionally chased by a `subst`/`ΣPathP` on the bound proof.
+--
+-- Formalises from the paper:
+--   `𝓝 : Universe` is the concrete instance of Definition 6.1
+--   (Section 6, GeneralisedUniverses) used in Section 4 (Planar Operads),
+--   where `NonSymmOperad K = Operad 𝓝 K` matches Definition 4.1.
 -- ============================================================================
 module HoTTOperads.Universe.Instances.Nat where
 

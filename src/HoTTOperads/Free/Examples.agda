@@ -1,6 +1,13 @@
 {-# OPTIONS --cubical #-}
--- The free planar operad on a family K : ℕ → Type. Recovered by specialising
--- the generalised free operad to 𝒰 = 𝓝.
+-- ============================================================================
+-- HoTTOperads.Free.Examples
+--
+-- Free planar operad on a family K : ℕ → Type. Obtained by specialising the
+-- generalised free operad of HoTTOperads.Free.IR to the universe 𝓝.
+--
+-- Formalises from the paper:
+--   Definition 9.1 (Section 9, Free Operad) — `FreePLOps K`.
+-- ============================================================================
 module HoTTOperads.Free.Examples where
 
 open import Cubical.Foundations.Prelude
@@ -13,6 +20,7 @@ private
   variable
     ℓ : Level
 
+-- Definition 9.1 (Section 9, Free Operad).
 -- Free planar operad operations on K : ℕ → Type.
 FreePLOps : (K : ℕ → Type ℓ) → ℕ → Type _
 FreePLOps K = FreeOps' {𝒰 = 𝓝} K
